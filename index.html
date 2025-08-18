@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>What's on your mind? ✨</title>
+	<link rel="stylesheet" href="styles.css">
+	<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body>
+	<!-- Animated background particles -->
+	<div class="particles-container">
+		<div class="particle"></div>
+		<div class="particle"></div>
+		<div class="particle"></div>
+		<div class="particle"></div>
+		<div class="particle"></div>
+		<div class="particle"></div>
+		<div class="particle"></div>
+		<div class="particle"></div>
+	</div>
+
+	<!-- Decorative floating emojis -->
+	<div class="floating-elements">
+		<div class="floating-emoji">✨</div>
+		<div class="floating-emoji">🎈</div>
+		<div class="floating-emoji">💡</div>
+		<div class="floating-emoji">🎉</div>
+		<div class="floating-emoji">⭐</div>
+	</div>
+
+	<div class="container">
+		<header class="header">
+			<div class="welcome">Welcome, Margarets! 💜</div>
+			<div class="mascot">
+				<span class="sticker">🤩</span>
+				<span class="sticker">🧠</span>
+				<span class="sticker">🎨</span>
+			</div>
+			<h1 class="title">
+				What's on your mind?
+				<span class="sparkles">✨</span>
+			</h1>
+			<p class="subtitle">Share your ideas, questions, wins, or shoutouts—this is our St. Margaret Random Thoughts Sharing!</p>
+		</header>
+
+		<main class="main-content">
+			<form id="thoughtForm" class="thought-form" action="https://formspree.io/f/xnnzykwz" method="POST" novalidate>
+				<!-- Name + Anonymous toggle -->
+				<div class="row">
+					<div class="field">
+						<label for="nameInput" class="label">Your name (optional)</label>
+						<input type="text" id="nameInput" name="name" class="text-input" placeholder="Type your name or nickname">
+					</div>
+					<div class="toggle-field">
+						<label class="switch">
+							<input type="checkbox" id="anonToggle" checked>
+							<span class="slider"></span>
+						</label>
+						<span class="toggle-text">Send anonymously</span>
+					</div>
+				</div>
+
+				<!-- Mood picker -->
+				<div class="mood-picker">
+					<span class="mood-label">Mood:</span>
+					<div class="moods" role="radiogroup" aria-label="Choose your mood">
+						<button type="button" class="mood active" data-mood="Happy" aria-pressed="true">😀 Happy</button>
+						<button type="button" class="mood" data-mood="Curious" aria-pressed="false">🤔 Curious</button>
+						<button type="button" class="mood" data-mood="Stressed" aria-pressed="false">😵‍💫 Stressed</button>
+						<button type="button" class="mood" data-mood="Excited" aria-pressed="false">🎉 Excited</button>
+						<button type="button" class="mood" data-mood="In love" aria-pressed="false">😍 In love</button>
+						<button type="button" class="mood" data-mood="Bored" aria-pressed="false">🥱 Bored</button>
+						<button type="button" class="mood" data-mood="Fine" aria-pressed="false">🙂 Fine</button>
+					</div>
+					<input type="hidden" name="mood" id="moodInput" value="Happy">
+				</div>
+
+				<!-- Prompt suggestions -->
+				<div class="prompts">
+					<span class="prompt-label">Need inspo?</span>
+					<div class="prompt-chips">
+						<button type="button" class="chip" data-prompt="Today I learned...">Today I learned...</button>
+						<button type="button" class="chip" data-prompt="A win I’m proud of...">A win I’m proud of...</button>
+						<button type="button" class="chip" data-prompt="I’m stuck on...">I’m stuck on...</button>
+						<button type="button" class="chip" data-prompt="Shoutout to... for...">Shoutout to... for...</button>
+						<button type="button" class="chip random" id="randomPrompt"><i class="fa-solid fa-shuffle"></i> Surprise me</button>
+					</div>
+				</div>
+
+				<!-- Thought input -->
+				<div class="input-container">
+					<label for="thoughtInput" class="label">What’s on your mind?</label>
+					<textarea
+						id="thoughtInput"
+						name="message"
+						placeholder="What’s on your mind? 🧠"
+						required
+						maxlength="1000"
+						class="thought-input"
+						aria-describedby="charHelp"
+					></textarea>
+					<div class="character-count" id="charHelp">
+						<span id="charCount">0</span>/1000
+					</div>
+				</div>
+
+				<!-- Live preview bubble -->
+				<div class="preview" id="preview" aria-hidden="true">
+					<div class="bubble">
+						<span id="previewText"></span>
+						<span class="tail"></span>
+					</div>
+				</div>
+
+				<!-- Fun vibe meter -->
+				<div class="vibe">
+					<span class="vibe-label">Vibe meter:</span>
+					<div class="vibe-bar">
+						<div class="vibe-fill" id="vibeFill"></div>
+					</div>
+				</div>
+
+				<!-- Submit -->
+				<button type="submit" class="send-button">
+					<i class="fas fa-paper-plane"></i>
+					Send Thought!
+				</button>
+			</form>
+
+			<div id="successMessage" class="success-message hidden" role="status" aria-live="polite">
+				<div class="success-content">
+					<i class="fas fa-check-circle"></i>
+					<h3>Thanks for sharing your thoughts! 🎉</h3>
+					<p>Your message has been sent successfully!</p>
+					<button id="newThoughtBtn" class="new-thought-btn">
+						<i class="fas fa-plus"></i>
+						Share Another Thought
+					</button>
+				</div>
+			</div>
+		</main>
+
+		<section class="tips">
+			<h2 class="tips-title">Ideas to share</h2>
+			<div class="tips-grid">
+				<div class="tip-card">💡 A study hack that works for you</div>
+				<div class="tip-card">🙋 A question you’re curious about</div>
+				<div class="tip-card">🏆 A small win from this week</div>
+				<div class="tip-card">🤝 A shoutout to a classmate</div>
+			</div>
+		</section>
+
+		<footer class="footer">
+			<p>Made with <i class="fas fa-heart"></i> by SHEN ✨</p>
+		</footer>
+	</div>
+
+	<script src="script.js"></script>
+</body>
+</html>
