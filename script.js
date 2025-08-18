@@ -204,7 +204,7 @@ async function submitToFormspree(payload) {
 	formData.append('name', payload.name);
 	formData.append('mood', payload.mood);
 
-	const response = await fetch('https://formspree.io/f/YOUR_FORM_ID', {
+	const response = await fetch('https://formspree.io/f/xnnzykwz', {
 		method: 'POST',
 		body: formData,
 		headers: { 'Accept': 'application/json' }
@@ -297,3 +297,4 @@ style.textContent = `
 	@keyframes confettiFall { to { transform: translateY(100vh) rotate(720deg); } }
 `;
 document.head.appendChild(style);
+
