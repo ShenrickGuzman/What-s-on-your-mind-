@@ -15,6 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
 	const vibeFill = document.getElementById('vibeFill');
 	const preview = document.getElementById('preview');
 	const previewText = document.getElementById('previewText');
+	const vibeEmoji = document.getElementById('vibeEmoji');
+	const faces = vibeEmoji ? Array.from(vibeEmoji.querySelectorAll('.face')) : [];
+	
+	// Theme toggle
+	const themeToggle = document.getElementById('themeToggle');
+	const themeIcon = document.getElementById('themeIcon');
+	
+	// Mood emojis
+	const moodEmojis = document.getElementById('moodEmojis');
+	const allMoodEmojis = Array.from(moodEmojis.querySelectorAll('.mood-emoji'));
 
 	let isSubmitting = false;
 
@@ -35,6 +45,27 @@ document.addEventListener('DOMContentLoaded', () => {
 		thoughtInput.maxLength = MAX_LEN;
 	}
 
+	// Theme toggle functionality
+	function initTheme() {
+		const savedTheme = localStorage.getItem('theme') || 'light';
+		document.body.classList.toggle('dark-mode', savedTheme === 'dark');
+		updateThemeIcon(savedTheme === 'dark');
+	}
+	
+	function toggleTheme() {
+		const isDark = document.body.classList.toggle('dark-mode');
+		localStorage.setItem('theme', isDark ? 'dark' : 'light');
+		updateThemeIcon(isDark);
+	}
+	
+	function updateThemeIcon(isDark) {
+		themeIcon.className = isDark ? 'fas fa-sun icon' : 'fas fa-moon icon';
+	}
+	
+	// Initialize theme
+	initTheme();
+	themeToggle.addEventListener('click', toggleTheme);
+
 	// Anonymous toggle
 	function applyAnonState() {
 		const anon = anonToggle.checked;
@@ -54,7 +85,9 @@ document.addEventListener('DOMContentLoaded', () => {
 			});
 			btn.classList.add('active');
 			btn.setAttribute('aria-pressed', 'true');
-			moodInput.value = btn.dataset.mood || 'Happy';
+			const mood = btn.dataset.mood || 'Happy';
+			moodInput.value = mood;
+			applyMoodTheme(mood);
 		});
 	});
 
@@ -105,6 +138,11 @@ document.addEventListener('DOMContentLoaded', () => {
 		const len = Math.min(MAX_LEN, thoughtInput.value.length);
 		const pct = Math.round((len / MAX_LEN) * 100);
 		vibeFill.style.width = pct + '%';
+		// emoji gauge: 0..5 faces
+		const count = Math.max(0, Math.min(5, Math.round(pct / 20)));
+		if (faces && faces.length) {
+			faces.forEach((f, idx) => f.classList.toggle('active', idx < count));
+		}
 	}
 	function updatePreview() {
 		const text = thoughtInput.value.trim();
@@ -143,6 +181,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		const submitBtn = thoughtForm.querySelector('.send-button');
 		const originalText = submitBtn.innerHTML;
 
+		// rocket launch + small confetti burst
+		submitBtn.classList.add('launching');
+		createConfetti(30);
+
 		submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
 		submitBtn.disabled = true;
 
@@ -162,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
 				b.setAttribute('aria-pressed', idx === 0 ? 'true' : 'false');
 			});
 			moodInput.value = 'Happy';
+			applyMoodTheme('Happy');
 			charCount.textContent = '0';
 			charCount.style.color = '#6b7280';
 			vibeFill.style.width = '0%';
@@ -173,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			isSubmitting = false;
 			submitBtn.innerHTML = originalText;
 			submitBtn.disabled = false;
+			submitBtn.classList.remove('launching');
 		}
 	});
 
@@ -194,6 +238,16 @@ document.addEventListener('DOMContentLoaded', () => {
 	updateCharCount();
 	updateVibe();
 	updatePreview();
+	applyMoodTheme('Happy');
+	
+	// Initialize mood emojis
+	updateMoodEmojis('Happy');
+	
+	// Reposition mood emojis every 8 seconds for more dynamic feel
+	setInterval(() => {
+		const currentMood = moodInput.value || 'Happy';
+		updateMoodEmojis(currentMood);
+	}, 8000);
 });
 
 // Submit to Formspree
@@ -266,10 +320,10 @@ function showError(message) {
 	}, 3600);
 }
 
-// Confetti
-function createConfetti() {
+// Confetti (optional count)
+function createConfetti(count = 60) {
 	const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3'];
-	for (let i = 0; i < 60; i++) {
+	for (let i = 0; i < count; i++) {
 		setTimeout(() => {
 			const confetti = document.createElement('div');
 			confetti.style.cssText = `
@@ -289,6 +343,80 @@ function createConfetti() {
 	}
 }
 
+// Dynamic background colors per mood
+function applyMoodTheme(mood) {
+	const map = {
+		'Happy': ['#FFD93D', '#FFB3D9'],
+		'Stressed': ['#DDA0DD', '#E6E6FA'],
+		'Excited': ['#FFB347', '#FFCC5C'],
+		'In love': ['#FF69B4', '#FFB6C1'],
+		'Curious': ['#87CEEB', '#98D8E8'],
+		'Sad': ['#87CEEB', '#B0C4DE'],
+		'Bored': ['#D3D3D3', '#F0F8FF'],
+		'Fine': ['#90EE90', '#98FB98'],
+	};
+	const [c1, c2] = map[mood] || ['#667eea', '#764ba2'];
+	const root = document.documentElement;
+	root.style.setProperty('--bg1', c1);
+	root.style.setProperty('--bg2', c2);
+	
+	// Update mood emojis
+	updateMoodEmojis(mood);
+}
+
+// Update background emojis based on mood
+function updateMoodEmojis(mood) {
+	const allMoodEmojis = document.querySelectorAll('.mood-emoji');
+	
+	// Hide all emojis first with smooth transition
+	allMoodEmojis.forEach(emoji => {
+		emoji.classList.remove('active', 'float', 'drift', 'bounce', 'spin');
+		emoji.classList.add('inactive');
+	});
+	
+	// Show only the current mood emojis and position them randomly
+	const currentMoodEmojis = document.querySelectorAll(`.mood-emoji[data-mood="${mood}"]`);
+	
+	// Create more varied positioning zones for increased emoji count
+	const zones = [
+		{ top: 5, left: 8, width: 18, height: 18 },     // Top-left
+		{ top: 12, left: 75, width: 18, height: 18 },   // Top-right
+		{ top: 20, left: 25, width: 20, height: 20 },   // Top-center
+		{ top: 30, left: 5, width: 22, height: 22 },    // Upper-left
+		{ top: 35, left: 70, width: 20, height: 20 },   // Upper-right
+		{ top: 45, left: 15, width: 25, height: 25 },   // Middle-left
+		{ top: 50, left: 55, width: 22, height: 22 },   // Middle-right
+		{ top: 60, left: 35, width: 20, height: 20 },   // Lower-center
+		{ top: 70, left: 10, width: 25, height: 25 },   // Bottom-left
+		{ top: 75, left: 65, width: 20, height: 20 },   // Bottom-right
+		{ top: 15, left: 45, width: 18, height: 18 },   // Upper-center
+		{ top: 65, left: 45, width: 18, height: 18 }    // Bottom-center
+	];
+	
+	// Animation types for variety
+	const animationTypes = ['float', 'drift', 'bounce', 'spin'];
+	
+	currentMoodEmojis.forEach((emoji, index) => {
+		// Use zones for better distribution, with some randomness within each zone
+		const zone = zones[index % zones.length];
+		const top = zone.top + Math.random() * zone.height;
+		const left = zone.left + Math.random() * zone.width;
+		const animationDelay = Math.random() * 4; // Random animation delay up to 4s
+		const animationType = animationTypes[Math.floor(Math.random() * animationTypes.length)];
+		
+		// Apply positioning and animation
+		emoji.style.top = `${top}%`;
+		emoji.style.left = `${left}%`;
+		emoji.style.animationDelay = `${animationDelay}s`;
+		
+		// Show the emoji with a slight delay for smooth transition
+		setTimeout(() => {
+			emoji.classList.remove('inactive');
+			emoji.classList.add('active', animationType);
+		}, index * 200);
+	});
+}
+
 // Inline keyframes for toasts + confetti
 const style = document.createElement('style');
 style.textContent = `
@@ -297,4 +425,3 @@ style.textContent = `
 	@keyframes confettiFall { to { transform: translateY(100vh) rotate(720deg); } }
 `;
 document.head.appendChild(style);
-
