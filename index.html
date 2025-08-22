@@ -5,10 +5,98 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>What's on your mind? ✨</title>
 	<link rel="stylesheet" href="styles.css">
-	<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&family=Fredoka:wght@400;600;700&family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 <body>
+	<!-- Theme toggle -->
+	<button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+		<i class="fas fa-moon icon" id="themeIcon"></i>
+	</button>
+
+	<!-- Mood-based background emojis -->
+	<div class="mood-emojis" id="moodEmojis">
+		<!-- Happy mood emojis -->
+		<div class="mood-emoji" data-mood="Happy">😀</div>
+		<div class="mood-emoji" data-mood="Happy">😁</div>
+		<div class="mood-emoji" data-mood="Happy">😊</div>
+		<div class="mood-emoji" data-mood="Happy">😄</div>
+		<div class="mood-emoji" data-mood="Happy">😃</div>
+		<div class="mood-emoji" data-mood="Happy">😆</div>
+		<div class="mood-emoji" data-mood="Happy">😋</div>
+		<div class="mood-emoji" data-mood="Happy">🤗</div>
+		
+		<!-- Curious mood emojis -->
+		<div class="mood-emoji" data-mood="Curious">🤔</div>
+		<div class="mood-emoji" data-mood="Curious">🧐</div>
+		<div class="mood-emoji" data-mood="Curious">🤨</div>
+		<div class="mood-emoji" data-mood="Curious">🤓</div>
+		<div class="mood-emoji" data-mood="Curious">👀</div>
+		<div class="mood-emoji" data-mood="Curious">🔍</div>
+		<div class="mood-emoji" data-mood="Curious">💭</div>
+		<div class="mood-emoji" data-mood="Curious">❓</div>
+		
+		<!-- Stressed mood emojis -->
+		<div class="mood-emoji" data-mood="Stressed">😓</div>
+		<div class="mood-emoji" data-mood="Stressed">😩</div>
+		<div class="mood-emoji" data-mood="Stressed">😰</div>
+		<div class="mood-emoji" data-mood="Stressed">😨</div>
+		<div class="mood-emoji" data-mood="Stressed">😱</div>
+		<div class="mood-emoji" data-mood="Stressed">😵</div>
+		<div class="mood-emoji" data-mood="Stressed">💦</div>
+		<div class="mood-emoji" data-mood="Stressed">😤</div>
+		
+		<!-- Excited mood emojis -->
+		<div class="mood-emoji" data-mood="Excited">🎉</div>
+		<div class="mood-emoji" data-mood="Excited">🤩</div>
+		<div class="mood-emoji" data-mood="Excited">😄</div>
+		<div class="mood-emoji" data-mood="Excited">🎊</div>
+		<div class="mood-emoji" data-mood="Excited">🎈</div>
+		<div class="mood-emoji" data-mood="Excited">✨</div>
+		<div class="mood-emoji" data-mood="Excited">🚀</div>
+		<div class="mood-emoji" data-mood="Excited">💫</div>
+		
+		<!-- In love mood emojis -->
+		<div class="mood-emoji" data-mood="In love">❤️</div>
+		<div class="mood-emoji" data-mood="In love">💕</div>
+		<div class="mood-emoji" data-mood="In love">💖</div>
+		<div class="mood-emoji" data-mood="In love">💗</div>
+		<div class="mood-emoji" data-mood="In love">💓</div>
+		<div class="mood-emoji" data-mood="In love">💝</div>
+		<div class="mood-emoji" data-mood="In love">🥰</div>
+		<div class="mood-emoji" data-mood="In love">😍</div>
+		
+		<!-- Sad mood emojis -->
+		<div class="mood-emoji" data-mood="Sad">😢</div>
+		<div class="mood-emoji" data-mood="Sad">😔</div>
+		<div class="mood-emoji" data-mood="Sad">☹️</div>
+		<div class="mood-emoji" data-mood="Sad">😞</div>
+		<div class="mood-emoji" data-mood="Sad">😥</div>
+		<div class="mood-emoji" data-mood="Sad">😭</div>
+		<div class="mood-emoji" data-mood="Sad">🥺</div>
+		<div class="mood-emoji" data-mood="Sad">😿</div>
+		
+		<!-- Bored mood emojis -->
+		<div class="mood-emoji" data-mood="Bored">😐</div>
+		<div class="mood-emoji" data-mood="Bored">🥱</div>
+		<div class="mood-emoji" data-mood="Bored">😴</div>
+		<div class="mood-emoji" data-mood="Bored">😑</div>
+		<div class="mood-emoji" data-mood="Bored">😶</div>
+		<div class="mood-emoji" data-mood="Bored">💤</div>
+		<div class="mood-emoji" data-mood="Bored">🫥</div>
+		<div class="mood-emoji" data-mood="Bored">😪</div>
+		
+		<!-- Fine mood emojis -->
+		<div class="mood-emoji" data-mood="Fine">🙂</div>
+		<div class="mood-emoji" data-mood="Fine">😌</div>
+		<div class="mood-emoji" data-mood="Fine">😊</div>
+		<div class="mood-emoji" data-mood="Fine">😉</div>
+		<div class="mood-emoji" data-mood="Fine">😏</div>
+		<div class="mood-emoji" data-mood="Fine">🤗</div>
+		<div class="mood-emoji" data-mood="Fine">😇</div>
+		<div class="mood-emoji" data-mood="Fine">🤝</div>
+	</div>
+
 	<!-- Animated background particles -->
 	<div class="particles-container">
 		<div class="particle"></div>
@@ -32,17 +120,24 @@
 
 	<div class="container">
 		<header class="header">
-			<div class="welcome">Welcome, Margarets! 💜</div>
-			<div class="mascot">
-				<span class="sticker">🤩</span>
-				<span class="sticker">🧠</span>
-				<span class="sticker">🎨</span>
+			<div class="title">
+				<div class="welcome-title">Welcome Margarets <span class="waving-heart">👋</span></div>
 			</div>
-			<h1 class="title">
-				What's on your mind?
-				<span class="sparkles">✨</span>
-			</h1>
-			<p class="subtitle">Share your ideas, questions, wins, or shoutouts—this is our St. Margaret Random Thoughts Sharing!</p>
+
+			<div class="welcome-bubble">
+				<div class="welcome-message">Share your ideas, questions, wins, or shoutouts—this is our St. Margaret Random Thoughts Sharing!</div>
+				<div class="welcome-message">Too shy to share? No worries! Only Sir Charles can read your thoughts/messages 😊</div>
+			</div>
+			<div class="title-container">
+				<div class="floating-sparkle sparkle-1">✨</div>
+				<div class="floating-sparkle sparkle-2">✨</div>
+				<div class="floating-sparkle sparkle-3">✨</div>
+				<div class="floating-sparkle sparkle-4">✨</div>
+				<h1 class="title">
+					What's on your mind?
+					<span class="sparkles">✨</span>
+				</h1>
+			</div>
 		</header>
 
 		<main class="main-content">
@@ -71,6 +166,7 @@
 						<button type="button" class="mood" data-mood="Stressed" aria-pressed="false">😵‍💫 Stressed</button>
 						<button type="button" class="mood" data-mood="Excited" aria-pressed="false">🎉 Excited</button>
 						<button type="button" class="mood" data-mood="In love" aria-pressed="false">😍 In love</button>
+						<button type="button" class="mood" data-mood="Sad" aria-pressed="false">😢 Sad</button>
 						<button type="button" class="mood" data-mood="Bored" aria-pressed="false">🥱 Bored</button>
 						<button type="button" class="mood" data-mood="Fine" aria-pressed="false">🙂 Fine</button>
 					</div>
@@ -120,11 +216,18 @@
 					<div class="vibe-bar">
 						<div class="vibe-fill" id="vibeFill"></div>
 					</div>
+					<div class="vibe-emoji" id="vibeEmoji" aria-hidden="true">
+						<span class="face" data-level="1">🙂</span>
+						<span class="face" data-level="2">😊</span>
+						<span class="face" data-level="3">😃</span>
+						<span class="face" data-level="4">😄</span>
+						<span class="face" data-level="5">🤩</span>
+					</div>
 				</div>
 
 				<!-- Submit -->
 				<button type="submit" class="send-button">
-					<i class="fas fa-paper-plane"></i>
+					<i class="fas fa-rocket"></i>
 					Send Thought!
 				</button>
 			</form>
