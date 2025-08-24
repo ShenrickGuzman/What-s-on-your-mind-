@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginScreen = document.getElementById('loginScreen');
     const dashboard = document.getElementById('dashboard');
     const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
     const logoutBtn = document.getElementById('logoutBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const searchInput = document.getElementById('searchInput');
@@ -48,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Event listeners
     loginForm.addEventListener('submit', handleLogin);
+    registerForm.addEventListener('submit', handleSelfRegister);
     logoutBtn.addEventListener('click', handleLogout);
     refreshBtn.addEventListener('click', loadMessages);
     searchInput.addEventListener('input', filterMessages);
