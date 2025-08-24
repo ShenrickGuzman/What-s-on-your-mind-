@@ -1,425 +1,298 @@
-document.addEventListener('DOMContentLoaded', () => {
-	const MAX_LEN = 1000;
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcryptjs');
+const session = require('express-session');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const path = require('path');
 
-	const thoughtForm = document.getElementById('thoughtForm');
-	const thoughtInput = document.getElementById('thoughtInput');
-	const charCount = document.getElementById('charCount');
-	const successMessage = document.getElementById('successMessage');
-	const newThoughtBtn = document.getElementById('newThoughtBtn');
-	const anonToggle = document.getElementById('anonToggle');
-	const nameInput = document.getElementById('nameInput');
-	const moodButtons = Array.from(document.querySelectorAll('.mood'));
-	const moodInput = document.getElementById('moodInput');
-	const randomPromptBtn = document.getElementById('randomPrompt');
-	const promptChips = Array.from(document.querySelectorAll('.chip[data-prompt]'));
-	const vibeFill = document.getElementById('vibeFill');
-	const preview = document.getElementById('preview');
-	const previewText = document.getElementById('previewText');
-	const vibeEmoji = document.getElementById('vibeEmoji');
-	const faces = vibeEmoji ? Array.from(vibeEmoji.querySelectorAll('.face')) : [];
-	
-	// Theme toggle
-	const themeToggle = document.getElementById('themeToggle');
-	const themeIcon = document.getElementById('themeIcon');
-	
-	// Mood emojis
-	const moodEmojis = document.getElementById('moodEmojis');
-	const allMoodEmojis = Array.from(moodEmojis.querySelectorAll('.mood-emoji'));
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-	let isSubmitting = false;
+// Middleware
+app.use(cors({
+    origin: [
+        'http://localhost:5500', 
+        'http://127.0.0.1:5500', 
+        'http://localhost:3000',
+        'https://what-s-on-your-mind.onrender.com',
+        process.env.FRONTEND_URL,
+        // Allow any origin for admin panel access
+        /^https:\/\/.*\.onrender\.com$/,
+        /^https:\/\/.*\.vercel\.app$/,
+        /^https:\/\/.*\.netlify\.app$/
+    ].filter(Boolean),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname)));
 
-	// Prompts
-	const prompts = [
-		'Today I learned...',
-		'A question I have is...',
-		'A win I’m proud of...',
-		'I’m stuck on...',
-		'A shoutout to... for...',
-		'Something funny that happened...',
-		'What I’m excited about...',
-		'What’s confusing me is...',
-	];
+// Session configuration - Updated for production
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { 
+        secure: false, // Set to false for now to fix session issues
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'lax',
+        httpOnly: true
+    },
+    proxy: false, // Disable proxy trust for now
+    name: 'thoughts-website-session'
+}));
 
-	// Ensure maxlength
-	if (thoughtInput && !thoughtInput.maxLength) {
-		thoughtInput.maxLength = MAX_LEN;
-	}
+// Database setup - Updated for Render
+const dbPath = process.env.NODE_ENV === 'production' 
+    ? '/tmp/messages.db'  // Use /tmp directory on Render
+    : './messages.db';
 
-	// Theme toggle functionality
-	function initTheme() {
-		const savedTheme = localStorage.getItem('theme') || 'light';
-		document.body.classList.toggle('dark-mode', savedTheme === 'dark');
-		updateThemeIcon(savedTheme === 'dark');
-	}
-	
-	function toggleTheme() {
-		const isDark = document.body.classList.toggle('dark-mode');
-		localStorage.setItem('theme', isDark ? 'dark' : 'light');
-		updateThemeIcon(isDark);
-	}
-	
-	function updateThemeIcon(isDark) {
-		themeIcon.className = isDark ? 'fas fa-sun icon' : 'fas fa-moon icon';
-	}
-	
-	// Initialize theme
-	initTheme();
-	themeToggle.addEventListener('click', toggleTheme);
-
-	// Anonymous toggle
-	function applyAnonState() {
-		const anon = anonToggle.checked;
-		nameInput.disabled = anon;
-		nameInput.classList.toggle('disabled', anon);
-		if (anon) nameInput.value = '';
-	}
-	anonToggle.addEventListener('change', applyAnonState);
-	applyAnonState();
-
-	// Mood picker
-	moodButtons.forEach(btn => {
-		btn.addEventListener('click', () => {
-			moodButtons.forEach(b => {
-				b.classList.remove('active');
-				b.setAttribute('aria-pressed', 'false');
-			});
-			btn.classList.add('active');
-			btn.setAttribute('aria-pressed', 'true');
-			const mood = btn.dataset.mood || 'Happy';
-			moodInput.value = mood;
-			applyMoodTheme(mood);
-		});
-	});
-
-	// Prompt chips
-	promptChips.forEach(chip => {
-		chip.addEventListener('click', () => {
-			const text = chip.dataset.prompt || '';
-			if (!text) return;
-			insertPrompt(text);
-		});
-	});
-
-	// Random prompt
-	if (randomPromptBtn) {
-		randomPromptBtn.addEventListener('click', () => {
-			const text = prompts[Math.floor(Math.random() * prompts.length)];
-			insertPrompt(text);
-			bounce(randomPromptBtn);
-		});
-	}
-
-	function insertPrompt(text) {
-		if (!thoughtInput.value) {
-			thoughtInput.value = text + ' ';
-		} else {
-			if (!thoughtInput.value.endsWith(' ')) thoughtInput.value += ' ';
-			thoughtInput.value += text + ' ';
-		}
-		updateCharCount();
-		updateVibe();
-		updatePreview();
-		thoughtInput.focus();
-	}
-
-	// Character counter + vibe + preview
-	function updateCharCount() {
-		const currentLength = thoughtInput.value.length;
-		charCount.textContent = currentLength;
-		if (currentLength > MAX_LEN * 0.9) {
-			charCount.style.color = '#dc3545';
-		} else if (currentLength > MAX_LEN * 0.6) {
-			charCount.style.color = '#eab308';
-		} else {
-			charCount.style.color = '#6b7280';
-		}
-	}
-	function updateVibe() {
-		const len = Math.min(MAX_LEN, thoughtInput.value.length);
-		const pct = Math.round((len / MAX_LEN) * 100);
-		vibeFill.style.width = pct + '%';
-		// emoji gauge: 0..5 faces
-		const count = Math.max(0, Math.min(5, Math.round(pct / 20)));
-		if (faces && faces.length) {
-			faces.forEach((f, idx) => f.classList.toggle('active', idx < count));
-		}
-	}
-	function updatePreview() {
-		const text = thoughtInput.value.trim();
-		if (text) {
-			preview.classList.add('active');
-			preview.setAttribute('aria-hidden', 'false');
-			previewText.textContent = text;
-		} else {
-			preview.classList.remove('active');
-			preview.setAttribute('aria-hidden', 'true');
-			previewText.textContent = '';
-		}
-	}
-
-	thoughtInput.addEventListener('input', () => {
-		updateCharCount();
-		updateVibe();
-		updatePreview();
-		// playful pulse
-		thoughtInput.style.transform = 'scale(1.01)';
-		setTimeout(() => { thoughtInput.style.transform = ''; }, 120);
-	});
-
-	// Form submission
-	thoughtForm.addEventListener('submit', async (e) => {
-		e.preventDefault();
-		if (isSubmitting) return;
-
-		const message = (thoughtInput.value || '').trim();
-		if (!message) {
-			showError('Please share something! 💭');
-			return;
-		}
-
-		isSubmitting = true;
-		const submitBtn = thoughtForm.querySelector('.send-button');
-		const originalText = submitBtn.innerHTML;
-
-		// rocket launch + small confetti burst
-		submitBtn.classList.add('launching');
-		createConfetti(30);
-
-		submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-		submitBtn.disabled = true;
-
-		try {
-			await submitToBackend({
-				message,
-				name: anonToggle.checked ? 'Anonymous' : (nameInput.value || 'Anonymous'),
-				mood: moodInput.value || 'Happy'
-			});
-
-			showSuccess();
-			thoughtForm.reset();
-			// Reset UI state
-			applyAnonState();
-			moodButtons.forEach((b, idx) => {
-				b.classList.toggle('active', idx === 0);
-				b.setAttribute('aria-pressed', idx === 0 ? 'true' : 'false');
-			});
-			moodInput.value = 'Happy';
-			applyMoodTheme('Happy');
-			charCount.textContent = '0';
-			charCount.style.color = '#6b7280';
-			vibeFill.style.width = '0%';
-			updatePreview();
-		} catch (err) {
-			console.error(err);
-			showError('Oops! Something went wrong. Please try again! 😅');
-		} finally {
-			isSubmitting = false;
-			submitBtn.innerHTML = originalText;
-			submitBtn.disabled = false;
-			submitBtn.classList.remove('launching');
-		}
-	});
-
-	// New thought button
-	if (newThoughtBtn) {
-		newThoughtBtn.addEventListener('click', () => {
-			hideSuccess();
-			thoughtInput.focus();
-		});
-	}
-
-	// Helpers
-	function bounce(el) {
-		el.style.transform = 'scale(1.06)';
-		setTimeout(() => { el.style.transform = ''; }, 120);
-	}
-
-	// Initial counts
-	updateCharCount();
-	updateVibe();
-	updatePreview();
-	applyMoodTheme('Happy');
-	
-	// Initialize mood emojis
-	updateMoodEmojis('Happy');
-	
-	// Reposition mood emojis every 8 seconds for more dynamic feel
-	setInterval(() => {
-		const currentMood = moodInput.value || 'Happy';
-		updateMoodEmojis(currentMood);
-	}, 8000);
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Error opening database:', err.message);
+    } else {
+        console.log('Connected to SQLite database at:', dbPath);
+        createTables();
+    }
 });
 
-// Submit to our backend
-// Replace the submitToBackend function
-async function submitToBackend(payload) {
-    // Use the current domain automatically - works on any hosting service
-    const response = await fetch('/api/messages', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
+function createTables() {
+    // Messages table
+    db.run(`CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message TEXT NOT NULL,
+        name TEXT,
+        mood TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+        if (err) {
+            console.error('Error creating messages table:', err.message);
+        } else {
+            console.log('Messages table ready');
+        }
     });
 
-    if (!response.ok) {
-        throw new Error('Network response was not ok');
+    // Admin users table
+    db.run(`CREATE TABLE IF NOT EXISTS admin_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+        if (err) {
+            console.error('Error creating admin_users table:', err.message);
+        } else {
+            console.log('Admin users table ready');
+            // Create default admin user if none exists
+            createDefaultAdmin();
+        }
+    });
+}
+
+function createDefaultAdmin() {
+    const defaultUsername = process.env.ADMIN_USERNAME || 'admin';
+    const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123'; // Change this in production!
+    
+    db.get('SELECT * FROM admin_users WHERE username = ?', [defaultUsername], (err, row) => {
+        if (err) {
+            console.error('Error checking admin user:', err.message);
+        } else if (!row) {
+            bcrypt.hash(defaultPassword, 10, (err, hash) => {
+                if (err) {
+                    console.error('Error hashing password:', err.message);
+                } else {
+                    db.run('INSERT INTO admin_users (username, password_hash) VALUES (?, ?)', 
+                        [defaultUsername, hash], (err) => {
+                        if (err) {
+                            console.error('Error creating default admin:', err.message);
+                        } else {
+                            console.log(`Default admin user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
+                            console.log('⚠️  IMPORTANT: Change these credentials in production!');
+                        }
+                    });
+                }
+            });
+        }
+    });
+}
+
+// Authentication middleware
+function requireAuth(req, res, next) {
+    console.log('Auth check - Session:', req.session);
+    console.log('Auth check - Authenticated:', req.session.authenticated);
+    
+    if (req.session.authenticated) {
+        console.log('User authenticated, proceeding...');
+        next();
+    } else {
+        console.log('User not authenticated, access denied');
+        res.status(401).json({ error: 'Authentication required' });
     }
-    return response.json();
 }
 
-// Success state
-function showSuccess() {
-	const thoughtForm = document.querySelector('.thought-form');
-	const successMessage = document.getElementById('successMessage');
+// Test route to verify server is working
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        message: 'Server is working!', 
+        timestamp: new Date().toISOString(),
+        sessionId: req.sessionID,
+        authenticated: !!req.session.authenticated
+    });
+});
 
-	thoughtForm.style.display = 'none';
-	successMessage.classList.remove('hidden');
-	createConfetti();
-}
-function hideSuccess() {
-	const thoughtForm = document.querySelector('.thought-form');
-	const successMessage = document.getElementById('successMessage');
+// Routes
 
-	thoughtForm.style.display = 'flex';
-	successMessage.classList.add('hidden');
-}
+// Store a new message
+app.post('/api/messages', (req, res) => {
+    const { message, name, mood } = req.body;
+    
+    if (!message || !mood) {
+        return res.status(400).json({ error: 'Message and mood are required' });
+    }
+    
+    const sql = 'INSERT INTO messages (message, name, mood) VALUES (?, ?, ?)';
+    db.run(sql, [message, name || 'Anonymous', mood], function(err) {
+        if (err) {
+            console.error('Error storing message:', err.message);
+            res.status(500).json({ error: 'Failed to store message' });
+        } else {
+            res.json({ 
+                success: true, 
+                messageId: this.lastID,
+                message: 'Message stored successfully' 
+            });
+        }
+    });
+});
 
-// Error toast
-function showError(message) {
-	const errorDiv = document.createElement('div');
-	errorDiv.className = 'error-message';
-	errorDiv.innerHTML = `
-		<i class="fas fa-exclamation-circle"></i>
-		<span>${message}</span>
-	`;
-	errorDiv.style.cssText = `
-		position: fixed;
-		top: 20px;
-		right: 20px;
-		background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
-		color: white;
-		padding: 14px 18px;
-		border-radius: 16px;
-		box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-		z-index: 1000;
-		animation: slideInRight 0.5s ease-out;
-		font-family: 'Comic Neue', cursive, sans-serif;
-		font-weight: 700;
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		max-width: 320px;
-	`;
-	document.body.appendChild(errorDiv);
-	setTimeout(() => {
-		errorDiv.style.animation = 'slideOutRight 0.5s ease-out';
-		setTimeout(() => { errorDiv.remove(); }, 480);
-	}, 3600);
-}
+// Get all messages (admin only)
+app.get('/api/messages', requireAuth, (req, res) => {
+    console.log('Messages endpoint accessed by user:', req.session.userId);
+    console.log('Session authenticated:', req.session.authenticated);
+    
+    const sql = 'SELECT * FROM messages ORDER BY timestamp DESC';
+    db.all(sql, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching messages:', err.message);
+            res.status(500).json({ error: 'Failed to fetch messages', details: err.message });
+        } else {
+            console.log(`Successfully fetched ${rows.length} messages`);
+            res.json(rows);
+        }
+    });
+});
 
-// Confetti (optional count)
-function createConfetti(count = 60) {
-	const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3'];
-	for (let i = 0; i < count; i++) {
-		setTimeout(() => {
-			const confetti = document.createElement('div');
-			confetti.style.cssText = `
-				position: fixed;
-				width: 10px;
-				height: 10px;
-				background: ${colors[Math.floor(Math.random() * colors.length)]};
-				top: -10px;
-				left: ${Math.random() * 100}vw;
-				border-radius: 50%;
-				z-index: 1000;
-				animation: confettiFall 2.8s linear forwards;
-			`;
-			document.body.appendChild(confetti);
-			setTimeout(() => { confetti.remove(); }, 3000);
-		}, i * 70);
-	}
-}
+// Delete a message (admin only)
+app.delete('/api/messages/:id', requireAuth, (req, res) => {
+    const messageId = req.params.id;
+    
+    if (!messageId || isNaN(messageId)) {
+        return res.status(400).json({ error: 'Invalid message ID' });
+    }
+    
+    const sql = 'DELETE FROM messages WHERE id = ?';
+    db.run(sql, [messageId], function(err) {
+        if (err) {
+            console.error('Error deleting message:', err.message);
+            res.status(500).json({ error: 'Failed to delete message' });
+        } else if (this.changes === 0) {
+            res.status(404).json({ error: 'Message not found' });
+        } else {
+            console.log(`Message ${messageId} deleted successfully`);
+            res.json({ 
+                success: true, 
+                message: 'Message deleted successfully',
+                deletedId: messageId
+            });
+        }
+    });
+});
 
-// Dynamic background colors per mood
-function applyMoodTheme(mood) {
-	const map = {
-		'Happy': ['#FFD93D', '#FFB3D9'],
-		'Stressed': ['#DDA0DD', '#E6E6FA'],
-		'Excited': ['#FFB347', '#FFCC5C'],
-		'In love': ['#FF69B4', '#FFB6C1'],
-		'Curious': ['#87CEEB', '#98D8E8'],
-		'Sad': ['#87CEEB', '#B0C4DE'],
-		'Bored': ['#D3D3D3', '#F0F8FF'],
-		'Fine': ['#90EE90', '#98FB98'],
-	};
-	const [c1, c2] = map[mood] || ['#667eea', '#764ba2'];
-	const root = document.documentElement;
-	root.style.setProperty('--bg1', c1);
-	root.style.setProperty('--bg2', c2);
-	
-	// Update mood emojis
-	updateMoodEmojis(mood);
-}
+// Admin login
+app.post('/api/admin/login', (req, res) => {
+    console.log('Login attempt received:', { 
+        username: req.body.username, 
+        hasPassword: !!req.body.password,
+        sessionId: req.sessionID 
+    });
+    
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        console.log('Login failed: Missing credentials');
+        return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    db.get('SELECT * FROM admin_users WHERE username = ?', [username], (err, user) => {
+        if (err) {
+            console.error('Database error during login:', err.message);
+            res.status(500).json({ error: 'Login failed - database error' });
+        } else if (!user) {
+            console.log('Login failed: User not found:', username);
+            res.status(401).json({ error: 'Invalid credentials' });
+        } else {
+            console.log('User found, checking password...');
+            bcrypt.compare(password, user.password_hash, (err, isMatch) => {
+                if (err) {
+                    console.error('Password comparison error:', err.message);
+                    res.status(500).json({ error: 'Login failed - password error' });
+                } else if (isMatch) {
+                    console.log('Password match! Setting session for user:', user.id);
+                    req.session.authenticated = true;
+                    req.session.userId = user.id;
+                    console.log('Session after login:', req.session);
+                    res.json({ success: true, message: 'Login successful' });
+                } else {
+                    console.log('Login failed: Password mismatch for user:', username);
+                    res.status(401).json({ error: 'Invalid credentials' });
+                }
+            });
+        }
+    });
+});
 
-// Update background emojis based on mood
-function updateMoodEmojis(mood) {
-	const allMoodEmojis = document.querySelectorAll('.mood-emoji');
-	
-	// Hide all emojis first with smooth transition
-	allMoodEmojis.forEach(emoji => {
-		emoji.classList.remove('active', 'float', 'drift', 'bounce', 'spin');
-		emoji.classList.add('inactive');
-	});
-	
-	// Show only the current mood emojis and position them randomly
-	const currentMoodEmojis = document.querySelectorAll(`.mood-emoji[data-mood="${mood}"]`);
-	
-	// Create more varied positioning zones for increased emoji count
-	const zones = [
-		{ top: 5, left: 8, width: 18, height: 18 },     // Top-left
-		{ top: 12, left: 75, width: 18, height: 18 },   // Top-right
-		{ top: 20, left: 25, width: 20, height: 20 },   // Top-center
-		{ top: 30, left: 5, width: 22, height: 22 },    // Upper-left
-		{ top: 35, left: 70, width: 20, height: 20 },   // Upper-right
-		{ top: 45, left: 15, width: 25, height: 25 },   // Middle-left
-		{ top: 50, left: 55, width: 22, height: 22 },   // Middle-right
-		{ top: 60, left: 35, width: 20, height: 20 },   // Lower-center
-		{ top: 70, left: 10, width: 25, height: 25 },   // Bottom-left
-		{ top: 75, left: 65, width: 20, height: 20 },   // Bottom-right
-		{ top: 15, left: 45, width: 18, height: 18 },   // Upper-center
-		{ top: 65, left: 45, width: 18, height: 18 }    // Bottom-center
-	];
-	
-	// Animation types for variety
-	const animationTypes = ['float', 'drift', 'bounce', 'spin'];
-	
-	currentMoodEmojis.forEach((emoji, index) => {
-		// Use zones for better distribution, with some randomness within each zone
-		const zone = zones[index % zones.length];
-		const top = zone.top + Math.random() * zone.height;
-		const left = zone.left + Math.random() * zone.width;
-		const animationDelay = Math.random() * 4; // Random animation delay up to 4s
-		const animationType = animationTypes[Math.floor(Math.random() * animationTypes.length)];
-		
-		// Apply positioning and animation
-		emoji.style.top = `${top}%`;
-		emoji.style.left = `${left}%`;
-		emoji.style.animationDelay = `${animationDelay}s`;
-		
-		// Show the emoji with a slight delay for smooth transition
-		setTimeout(() => {
-			emoji.classList.remove('inactive');
-			emoji.classList.add('active', animationType);
-		}, index * 200);
-	});
-}
+// Admin logout
+app.post('/api/admin/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            res.status(500).json({ error: 'Logout failed' });
+        } else {
+            res.json({ success: true, message: 'Logout successful' });
+        }
+    });
+});
 
-// Inline keyframes for toasts + confetti
-const style = document.createElement('style');
-style.textContent = `
-	@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-	@keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
-	@keyframes confettiFall { to { transform: translateY(100vh) rotate(720deg); } }
-`;
-document.head.appendChild(style);
+// Check authentication status
+app.get('/api/admin/status', (req, res) => {
+    res.json({ 
+        authenticated: !!req.session.authenticated,
+        userId: req.session.userId 
+    });
+});
+
+// Serve admin page
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Admin panel available at: http://localhost:${PORT}/admin`);
+    console.log(`Default admin credentials: admin / admin123`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error('Error closing database:', err.message);
+        } else {
+            console.log('Database connection closed');
+        }
+        process.exit(0);
+    });
+});
