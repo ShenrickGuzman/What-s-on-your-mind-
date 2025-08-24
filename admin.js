@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginScreen = document.getElementById('loginScreen');
     const dashboard = document.getElementById('dashboard');
     const loginForm = document.getElementById('loginForm');
-    const registerForm = document.getElementById('registerForm');
+    const signupForm = document.getElementById('signupForm');
     const logoutBtn = document.getElementById('logoutBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const searchInput = document.getElementById('searchInput');
@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const messagesList = document.getElementById('messagesList');
     const loadingSpinner = document.getElementById('loadingSpinner');
     const noMessages = document.getElementById('noMessages');
+    
+    // Auth toggle elements
+    const showSignupBtn = document.getElementById('showSignupBtn');
+    const showLoginBtn = document.getElementById('showLoginBtn');
+    const authSubtitle = document.getElementById('authSubtitle');
     
     // Admin management elements
     const adminManagementSection = document.getElementById('adminManagementSection');
@@ -42,14 +47,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let filteredMessages = [];
     let currentSort = 'newest';
     let currentUserInfo = null;
-    let isSuperAdmin = false;
+    let isOwner = false;
     
     // Check authentication status on load
     checkAuthStatus();
     
     // Event listeners
     loginForm.addEventListener('submit', handleLogin);
-    registerForm.addEventListener('submit', handleSelfRegister);
+    signupForm.addEventListener('submit', handleSignup);
+    showSignupBtn.addEventListener('click', showSignupForm);
+    showLoginBtn.addEventListener('click', showLoginForm);
     logoutBtn.addEventListener('click', handleLogout);
     refreshBtn.addEventListener('click', loadMessages);
     searchInput.addEventListener('input', filterMessages);
@@ -71,6 +78,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // Auth toggle functions
+    function showSignupForm() {
+        loginForm.classList.add('hidden');
+        signupForm.classList.remove('hidden');
+        showSignupBtn.classList.add('hidden');
+        showLoginBtn.classList.remove('hidden');
+        authSubtitle.textContent = 'Create a new admin account';
+    }
+    
+    function showLoginForm() {
+        signupForm.classList.add('hidden');
+        loginForm.classList.remove('hidden');
+        showLoginBtn.classList.add('hidden');
+        showSignupBtn.classList.remove('hidden');
+        authSubtitle.textContent = 'Enter your credentials to view messages';
+    }
+    
     // Authentication functions
     async function checkAuthStatus() {
         try {
@@ -83,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadUserInfo();
                 showDashboard();
                 loadMessages();
-                if (isSuperAdmin) {
+                if (isOwner) {
                     loadAdminUsers();
                 }
             } else {
@@ -95,11 +119,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Self-registration function
-    async function handleSelfRegister(e) {
+    // Signup function
+    async function handleSignup(e) {
         e.preventDefault();
         
-        const formData = new FormData(registerForm);
+        const formData = new FormData(signupForm);
         const username = formData.get('username');
         const password = formData.get('password');
         const inviteCode = formData.get('inviteCode');
@@ -131,23 +155,49 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (data.success) {
-                showToast('success', 'Admin account created successfully! You can now login. 🎉');
-                registerForm.reset();
+                showToast('success', 'Account created successfully! Logging you in... 🎉');
                 
-                // Auto-fill the login form with the new credentials
-                document.getElementById('username').value = username;
-                document.getElementById('password').value = password;
-                
-                // Show success message and suggest login
-                setTimeout(() => {
-                    showToast('success', 'Your credentials have been filled in. Click Login to continue! 👆');
-                }, 2000);
+                // Automatically log in the new user
+                await autoLogin(username, password);
             } else {
-                showToast('error', data.error || 'Failed to create admin account');
+                showToast('error', data.error || 'Failed to create account');
             }
         } catch (error) {
-            console.error('Error creating admin account:', error);
-            showToast('error', 'Failed to create admin account. Please try again.');
+            console.error('Error creating account:', error);
+            showToast('error', 'Failed to create account. Please try again.');
+        }
+    }
+    
+    // Auto-login after signup
+    async function autoLogin(username, password) {
+        try {
+            const response = await fetch(`${API_BASE}/admin/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ username, password })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('success', 'Welcome! You are now logged in! 🎉');
+                await loadUserInfo();
+                showDashboard();
+                loadMessages();
+                if (isOwner) {
+                    loadAdminUsers();
+                }
+            } else {
+                showToast('error', 'Account created but login failed. Please try logging in manually.');
+                showLoginForm();
+            }
+        } catch (error) {
+            console.error('Auto-login error:', error);
+            showToast('error', 'Account created but login failed. Please try logging in manually.');
+            showLoginForm();
         }
     }
     
@@ -162,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentUserData = users.find(user => user.id === currentUserInfo?.id);
                 if (currentUserData) {
                     currentUserInfo = currentUserData;
-                    isSuperAdmin = currentUserData.is_super_admin === 1;
+                    isOwner = currentUserData.is_owner === 1;
                     updateUserDisplay();
                 }
             }
@@ -174,10 +224,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateUserDisplay() {
         if (currentUserInfo) {
             currentUser.textContent = `👤 ${currentUserInfo.username}`;
-            userRole.textContent = isSuperAdmin ? '�� Super Admin' : '👤 Admin';
+            userRole.textContent = isOwner ? '👑 Owner' : '👤 Admin';
             
             // Show/hide admin management section
-            if (isSuperAdmin) {
+            if (isOwner) {
                 adminManagementSection.classList.remove('hidden');
             } else {
                 adminManagementSection.classList.add('hidden');
@@ -217,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadUserInfo();
                 showDashboard();
                 loadMessages();
-                if (isSuperAdmin) {
+                if (isOwner) {
                     loadAdminUsers();
                 }
             } else {
@@ -243,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 showToast('success', 'Logged out successfully! 👋');
                 currentUserInfo = null;
-                isSuperAdmin = false;
+                isOwner = false;
                 showLogin();
             }
         } catch (error) {
@@ -294,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function loadAdminUsers() {
-        if (!isSuperAdmin) return;
+        if (!isOwner) return;
         
         try {
             const response = await fetch(`${API_BASE}/admin/users`, {
@@ -312,17 +362,17 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function displayAdminUsers(users) {
         const usersHTML = users.map(user => `
-            <div class="admin-user-card ${user.is_super_admin ? 'super-admin' : 'regular-admin'}">
+            <div class="admin-user-card ${user.is_owner ? 'owner' : 'regular-admin'}">
                 <div class="admin-user-info">
-                    <div class="admin-user-avatar">${user.is_super_admin ? '👑' : '👤'}</div>
+                    <div class="admin-user-avatar">${user.is_owner ? '👑' : '👤'}</div>
                     <div class="admin-user-details">
                         <h4>${user.username}</h4>
-                        <span class="admin-user-role">${user.is_super_admin ? 'Super Admin' : 'Admin'}</span>
+                        <span class="admin-user-role">${user.is_owner ? 'Owner' : 'Admin'}</span>
                         <small>Created: ${new Date(user.created_at).toLocaleDateString()}</small>
                     </div>
                 </div>
                 <div class="admin-user-actions">
-                    ${!user.is_super_admin && user.id !== currentUserInfo?.id ? 
+                    ${!user.is_owner && user.id !== currentUserInfo?.id ? 
                         `<button class="delete-admin-btn" onclick="deleteAdminUser(${user.id}, '${user.username}')" title="Delete admin user">
                             <i class="fas fa-trash"></i>
                         </button>` : ''
@@ -368,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dashboard.classList.add('hidden');
         loginForm.reset();
         currentUserInfo = null;
-        isSuperAdmin = false;
+        isOwner = false;
     }
     
     function showDashboard() {
