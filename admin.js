@@ -95,6 +95,62 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // Self-registration function
+    async function handleSelfRegister(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(registerForm);
+        const username = formData.get('username');
+        const password = formData.get('password');
+        const inviteCode = formData.get('inviteCode');
+        
+        if (!username || !password || !inviteCode) {
+            showToast('error', 'Please fill in all fields');
+            return;
+        }
+        
+        if (username.length < 3) {
+            showToast('error', 'Username must be at least 3 characters long');
+            return;
+        }
+        
+        if (password.length < 6) {
+            showToast('error', 'Password must be at least 6 characters long');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/self-register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password, inviteCode })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('success', 'Admin account created successfully! You can now login. 🎉');
+                registerForm.reset();
+                
+                // Auto-fill the login form with the new credentials
+                document.getElementById('username').value = username;
+                document.getElementById('password').value = password;
+                
+                // Show success message and suggest login
+                setTimeout(() => {
+                    showToast('success', 'Your credentials have been filled in. Click Login to continue! 👆');
+                }, 2000);
+            } else {
+                showToast('error', data.error || 'Failed to create admin account');
+            }
+        } catch (error) {
+            console.error('Error creating admin account:', error);
+            showToast('error', 'Failed to create admin account. Please try again.');
+        }
+    }
+    
     async function loadUserInfo() {
         try {
             const response = await fetch(`${API_BASE}/admin/users`, {
