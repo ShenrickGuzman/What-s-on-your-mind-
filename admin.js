@@ -75,6 +75,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ username, password })
             });
             
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const textResponse = await response.text();
+                console.error('Non-JSON response received:', textResponse);
+                throw new Error('Server returned non-JSON response. Check server logs.');
+            }
+            
             const data = await response.json();
             
             if (data.success) {
@@ -86,7 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Login error:', error);
-            showToast('error', 'Login failed. Please try again.');
+            if (error.message.includes('non-JSON')) {
+                showToast('error', 'Server error - check server configuration');
+            } else {
+                showToast('error', 'Login failed. Please try again.');
+            }
         }
     }
     
@@ -127,17 +139,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentials: 'include'
             });
             
+            console.log('Messages response status:', response.status);
+            console.log('Messages response headers:', response.headers);
+            
             if (!response.ok) {
-                throw new Error('Failed to fetch messages');
+                if (response.status === 401) {
+                    console.log('User not authenticated, redirecting to login');
+                    showLogin();
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const textResponse = await response.text();
+                console.error('Non-JSON response received:', textResponse);
+                throw new Error('Server returned non-JSON response');
             }
             
             allMessages = await response.json();
+            console.log('Messages loaded successfully:', allMessages.length);
             updateStats();
             filterMessages();
             showLoading(false);
         } catch (error) {
             console.error('Error loading messages:', error);
-            showToast('error', 'Failed to load messages');
+            if (error.message.includes('401')) {
+                showToast('error', 'Please login again');
+                showLogin();
+            } else if (error.message.includes('non-JSON')) {
+                showToast('error', 'Server configuration error');
+            } else {
+                showToast('error', 'Failed to load messages: ' + error.message);
+            }
             showLoading(false);
         }
     }
