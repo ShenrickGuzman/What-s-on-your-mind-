@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const API_BASE = '/api';
+    // Use the current domain for API calls
+    const API_BASE = window.location.origin + '/api';
     
     // DOM elements
     const loginScreen = document.getElementById('loginScreen');
