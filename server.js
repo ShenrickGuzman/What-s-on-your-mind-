@@ -11,30 +11,51 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:5500', 'http://127.0.0.1:5500', 'http://localhost:3000'],
-    credentials: true
+    origin: [
+        'http://localhost:5500', 
+        'http://127.0.0.1:5500', 
+        'http://localhost:3000',
+        'https://what-s-on-your-mind.onrender.com',
+        process.env.FRONTEND_URL,
+        // Allow any origin for admin panel access
+        /^https:\/\/.*\.onrender\.com$/,
+        /^https:\/\/.*\.vercel\.app$/,
+        /^https:\/\/.*\.netlify\.app$/
+    ].filter(Boolean),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname)));
 
-// Session configuration
+// Session configuration - Updated for production
 app.use(session({
-    secret: 'your-secret-key-change-this-in-production',
+    secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: false, // Set to true in production with HTTPS
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+        secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        httpOnly: true,
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+    },
+    proxy: process.env.NODE_ENV === 'production', // Trust proxy in production
+    name: 'thoughts-website-session'
 }));
 
-// Database setup
-const db = new sqlite3.Database('./messages.db', (err) => {
+// Database setup - Updated for Render
+const dbPath = process.env.NODE_ENV === 'production' 
+    ? '/tmp/messages.db'  // Use /tmp directory on Render
+    : './messages.db';
+
+const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database:', err.message);
     } else {
-        console.log('Connected to SQLite database');
+        console.log('Connected to SQLite database at:', dbPath);
         createTables();
     }
 });
@@ -73,8 +94,8 @@ function createTables() {
 }
 
 function createDefaultAdmin() {
-    const defaultUsername = 'admin';
-    const defaultPassword = 'admin123'; // Change this in production!
+    const defaultUsername = process.env.ADMIN_USERNAME || 'admin';
+    const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123'; // Change this in production!
     
     db.get('SELECT * FROM admin_users WHERE username = ?', [defaultUsername], (err, row) => {
         if (err) {
@@ -89,7 +110,8 @@ function createDefaultAdmin() {
                         if (err) {
                             console.error('Error creating default admin:', err.message);
                         } else {
-                            console.log('Default admin user created - Username: admin, Password: admin123');
+                            console.log(`Default admin user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
+                            console.log('⚠️  IMPORTANT: Change these credentials in production!');
                         }
                     });
                 }
