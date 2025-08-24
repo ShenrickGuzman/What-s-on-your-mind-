@@ -38,9 +38,8 @@ app.use(session({
     cookie: { 
         secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        httpOnly: true,
-        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+        sameSite: 'lax', // Changed from 'none' to 'lax' for better compatibility
+        httpOnly: true
     },
     proxy: process.env.NODE_ENV === 'production', // Trust proxy in production
     name: 'thoughts-website-session'
@@ -122,9 +121,14 @@ function createDefaultAdmin() {
 
 // Authentication middleware
 function requireAuth(req, res, next) {
+    console.log('Auth check - Session:', req.session);
+    console.log('Auth check - Authenticated:', req.session.authenticated);
+    
     if (req.session.authenticated) {
+        console.log('User authenticated, proceeding...');
         next();
     } else {
+        console.log('User not authenticated, access denied');
         res.status(401).json({ error: 'Authentication required' });
     }
 }
@@ -156,12 +160,16 @@ app.post('/api/messages', (req, res) => {
 
 // Get all messages (admin only)
 app.get('/api/messages', requireAuth, (req, res) => {
+    console.log('Messages endpoint accessed by user:', req.session.userId);
+    console.log('Session authenticated:', req.session.authenticated);
+    
     const sql = 'SELECT * FROM messages ORDER BY timestamp DESC';
     db.all(sql, [], (err, rows) => {
         if (err) {
             console.error('Error fetching messages:', err.message);
-            res.status(500).json({ error: 'Failed to fetch messages' });
+            res.status(500).json({ error: 'Failed to fetch messages', details: err.message });
         } else {
+            console.log(`Successfully fetched ${rows.length} messages`);
             res.json(rows);
         }
     });
