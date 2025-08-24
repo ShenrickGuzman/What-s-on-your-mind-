@@ -247,7 +247,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="message-name">${message.name}</span>
                         <span class="message-mood">${moodEmoji} ${message.mood}</span>
                     </div>
-                    <span class="message-timestamp">${timestamp}</span>
+                    <div class="message-actions">
+                        <span class="message-timestamp">${timestamp}</span>
+                        <button class="delete-btn" onclick="deleteMessage(${message.id})" title="Delete message">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="message-text">${message.message}</div>
             </div>
@@ -296,4 +301,89 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dashboard.classList.contains('hidden')) return;
         loadMessages();
     }, 30000);
+    
+    // Delete message function (global scope for onclick)
+    window.deleteMessage = async function(messageId) {
+        // Store the message ID for deletion
+        window.pendingDeleteId = messageId;
+        
+        // Show the delete confirmation modal
+        const deleteModal = document.getElementById('deleteModal');
+        deleteModal.classList.remove('hidden');
+        
+        // Add event listeners for modal buttons
+        const cancelBtn = document.getElementById('cancelDelete');
+        const confirmBtn = document.getElementById('confirmDelete');
+        
+        // Remove existing listeners to prevent duplicates
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+        
+        // Get fresh references
+        const newCancelBtn = document.getElementById('cancelDelete');
+        const newConfirmBtn = document.getElementById('confirmDelete');
+        
+        // Add new listeners
+        newCancelBtn.addEventListener('click', () => {
+            deleteModal.classList.add('hidden');
+            window.pendingDeleteId = null;
+        });
+        
+        newConfirmBtn.addEventListener('click', async () => {
+            await performDelete(window.pendingDeleteId);
+            deleteModal.classList.add('hidden');
+            window.pendingDeleteId = null;
+        });
+        
+        // Close modal when clicking outside
+        deleteModal.addEventListener('click', (e) => {
+            if (e.target === deleteModal) {
+                deleteModal.classList.add('hidden');
+                window.pendingDeleteId = null;
+            }
+        });
+        
+        // Close modal with Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                deleteModal.classList.add('hidden');
+                window.pendingDeleteId = null;
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    };
+    
+    // Perform the actual deletion
+    async function performDelete(messageId) {
+        try {
+            const response = await fetch(`${API_BASE}/messages/${messageId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showToast('success', 'Message deleted successfully! 🗑️');
+                
+                // Remove message from local arrays
+                allMessages = allMessages.filter(m => m.id !== messageId);
+                filteredMessages = filteredMessages.filter(m => m.id !== messageId);
+                
+                // Update stats and display
+                updateStats();
+                displayMessages();
+            } else {
+                showToast('error', result.error || 'Failed to delete message');
+            }
+        } catch (error) {
+            console.error('Error deleting message:', error);
+            showToast('error', 'Failed to delete message: ' + error.message);
+        }
+    }
 });
