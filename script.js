@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		submitBtn.disabled = true;
 
 		try {
-			await submitToFormspree({
+			await submitToBackend({
 				message,
 				name: anonToggle.checked ? 'Anonymous' : (nameInput.value || 'Anonymous'),
 				mood: moodInput.value || 'Happy'
@@ -250,18 +250,14 @@ document.addEventListener('DOMContentLoaded', () => {
 	}, 8000);
 });
 
-// Submit to Formspree
-async function submitToFormspree(payload) {
-	// Replace 'YOUR_FORM_ID' with your actual Formspree form ID
-	const formData = new FormData();
-	formData.append('message', payload.message);
-	formData.append('name', payload.name);
-	formData.append('mood', payload.mood);
-
-	const response = await fetch('https://formspree.io/f/xnnzykwz', {
+// Submit to our backend
+async function submitToBackend(payload) {
+	const response = await fetch('http://localhost:3000/api/messages', {
 		method: 'POST',
-		body: formData,
-		headers: { 'Accept': 'application/json' }
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(payload)
 	});
 
 	if (!response.ok) {
