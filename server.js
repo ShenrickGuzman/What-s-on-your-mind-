@@ -363,6 +363,62 @@ app.post('/api/admin/register', requireAuth, (req, res) => {
     });
 });
 
+// Self-registration for admin accounts (no auth required, but with security controls)
+app.post('/api/admin/self-register', (req, res) => {
+    const { username, password, inviteCode } = req.body;
+    
+    if (!username || !password || !inviteCode) {
+        return res.status(400).json({ error: 'Username, password, and invite code are required' });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    if (username.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters long' });
+    }
+    
+    // Check if invite code is valid (you can customize this)
+    const validInviteCode = process.env.ADMIN_INVITE_CODE || 'ADMIN2024';
+    if (inviteCode !== validInviteCode) {
+        return res.status(403).json({ error: 'Invalid invite code' });
+    }
+    
+    // Check if username already exists
+    db.get('SELECT id FROM admin_users WHERE username = ?', [username], (err, existingUser) => {
+        if (err) {
+            console.error('Error checking existing username:', err.message);
+            res.status(500).json({ error: 'Failed to check username availability' });
+        } else if (existingUser) {
+            res.status(409).json({ error: 'Username already exists' });
+        } else {
+            // Create new admin user (regular admin, not super admin)
+            bcrypt.hash(password, 10, (err, hash) => {
+                if (err) {
+                    console.error('Error hashing password:', err.message);
+                    res.status(500).json({ error: 'Failed to create user' });
+                } else {
+                    db.run('INSERT INTO admin_users (username, password_hash, is_super_admin) VALUES (?, ?, ?)', 
+                        [username, hash, 0], (err) => {
+                        if (err) {
+                            console.error('Error creating admin user:', err.message);
+                            res.status(500).json({ error: 'Failed to create user' });
+                        } else {
+                            console.log(`New admin user self-registered: ${username}`);
+                            res.json({ 
+                                success: true, 
+                                message: 'Admin account created successfully! You can now login.',
+                                username: username
+                            });
+                        }
+                    });
+                }
+            });
+        }
+    });
+});
+
 // Get admin users list (super admin only)
 app.get('/api/admin/users', requireAuth, (req, res) => {
     // Check if current user is super admin
