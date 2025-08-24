@@ -36,12 +36,12 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
+        secure: false, // Set to false for now to fix session issues
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'lax', // Changed from 'none' to 'lax' for better compatibility
+        sameSite: 'lax',
         httpOnly: true
     },
-    proxy: process.env.NODE_ENV === 'production', // Trust proxy in production
+    proxy: false, // Disable proxy trust for now
     name: 'thoughts-website-session'
 }));
 
@@ -133,6 +133,16 @@ function requireAuth(req, res, next) {
     }
 }
 
+// Test route to verify server is working
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        message: 'Server is working!', 
+        timestamp: new Date().toISOString(),
+        sessionId: req.sessionID,
+        authenticated: !!req.session.authenticated
+    });
+});
+
 // Routes
 
 // Store a new message
@@ -177,28 +187,40 @@ app.get('/api/messages', requireAuth, (req, res) => {
 
 // Admin login
 app.post('/api/admin/login', (req, res) => {
+    console.log('Login attempt received:', { 
+        username: req.body.username, 
+        hasPassword: !!req.body.password,
+        sessionId: req.sessionID 
+    });
+    
     const { username, password } = req.body;
     
     if (!username || !password) {
+        console.log('Login failed: Missing credentials');
         return res.status(400).json({ error: 'Username and password are required' });
     }
     
     db.get('SELECT * FROM admin_users WHERE username = ?', [username], (err, user) => {
         if (err) {
-            console.error('Error during login:', err.message);
-            res.status(500).json({ error: 'Login failed' });
+            console.error('Database error during login:', err.message);
+            res.status(500).json({ error: 'Login failed - database error' });
         } else if (!user) {
+            console.log('Login failed: User not found:', username);
             res.status(401).json({ error: 'Invalid credentials' });
         } else {
+            console.log('User found, checking password...');
             bcrypt.compare(password, user.password_hash, (err, isMatch) => {
                 if (err) {
-                    console.error('Error comparing passwords:', err.message);
-                    res.status(500).json({ error: 'Login failed' });
+                    console.error('Password comparison error:', err.message);
+                    res.status(500).json({ error: 'Login failed - password error' });
                 } else if (isMatch) {
+                    console.log('Password match! Setting session for user:', user.id);
                     req.session.authenticated = true;
                     req.session.userId = user.id;
+                    console.log('Session after login:', req.session);
                     res.json({ success: true, message: 'Login successful' });
                 } else {
+                    console.log('Login failed: Password mismatch for user:', username);
                     res.status(401).json({ error: 'Invalid credentials' });
                 }
             });
