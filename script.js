@@ -251,19 +251,21 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Submit to our backend
+// Replace the submitToBackend function
 async function submitToBackend(payload) {
-	const response = await fetch('http://localhost:3000/api/messages', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify(payload)
-	});
+    // Use the current domain automatically - works on any hosting service
+    const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    });
 
-	if (!response.ok) {
-		throw new Error('Network response was not ok');
-	}
-	return response.json();
+    if (!response.ok) {
+        throw new Error('Network response was not ok');
+    }
+    return response.json();
 }
 
 // Success state
