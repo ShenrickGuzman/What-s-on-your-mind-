@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Thoughts Dashboard 🎭</title>
+    <link rel="stylesheet" href="admin-styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&family=Fredoka:wght@400;600;700&family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="admin-icon">👑</div>
+                <h1>Admin Access</h1>
+                <p>Enter your credentials to view messages</p>
+            </div>
+            
+            <form id="loginForm" class="login-form">
+                <div class="input-group">
+                    <label for="username">Username</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Login
+                </button>
+            </form>
+            
+            <div class="login-footer">
+                <p>Default: admin / admin123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="dashboard" class="dashboard hidden">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1>Thoughts Dashboard 🎭</h1>
+                    <p>All the wonderful thoughts from your community</p>
+                </div>
+                <div class="header-right">
+                    <button id="logoutBtn" class="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-section">
+            <div class="stat-card">
+                <div class="stat-icon">💭</div>
+                <div class="stat-content">
+                    <h3 id="totalMessages">0</h3>
+                    <p>Total Messages</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">😊</div>
+                <div class="stat-content">
+                    <h3 id="happyMoods">0</h3>
+                    <p>Happy Thoughts</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">🤔</div>
+                <div class="stat-content">
+                    <h3 id="curiousMoods">0</h3>
+                    <p>Curious Thoughts</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">🎉</div>
+                <div class="stat-content">
+                    <h3 id="excitedMoods">0</h3>
+                    <p>Excited Thoughts</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters and Search -->
+        <div class="controls-section">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search messages...">
+            </div>
+            
+            <div class="filter-controls">
+                <select id="moodFilter" class="mood-filter">
+                    <option value="">All Moods</option>
+                    <option value="Happy">😀 Happy</option>
+                    <option value="Curious">🤔 Curious</option>
+                    <option value="Stressed">😵‍💫 Stressed</option>
+                    <option value="Excited">🎉 Excited</option>
+                    <option value="In love">😍 In love</option>
+                    <option value="Sad">😢 Sad</option>
+                    <option value="Bored">🥱 Bored</option>
+                    <option value="Fine">🙂 Fine</option>
+                </select>
+                
+                <button id="refreshBtn" class="refresh-btn">
+                    <i class="fas fa-sync-alt"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages List -->
+        <div class="messages-section">
+            <div class="messages-header">
+                <h2>Recent Messages</h2>
+                <div class="sort-controls">
+                    <button id="sortNewest" class="sort-btn active" data-sort="newest">
+                        <i class="fas fa-clock"></i>
+                        Newest First
+                    </button>
+                    <button id="sortOldest" class="sort-btn" data-sort="oldest">
+                        <i class="fas fa-history"></i>
+                        Oldest First
+                    </button>
+                </div>
+            </div>
+            
+            <div id="messagesList" class="messages-list">
+                <!-- Messages will be populated here -->
+            </div>
+            
+            <div id="loadingSpinner" class="loading-spinner hidden">
+                <div class="spinner"></div>
+                <p>Loading messages...</p>
+            </div>
+            
+            <div id="noMessages" class="no-messages hidden">
+                <div class="no-messages-icon">📭</div>
+                <h3>No messages yet</h3>
+                <p>When people start sharing thoughts, they'll appear here!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Toast -->
+    <div id="errorToast" class="error-toast hidden">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="errorMessage"></span>
+    </div>
+
+    <!-- Success Toast -->
+    <div id="successToast" class="success-toast hidden">
+        <i class="fas fa-check-circle"></i>
+        <span id="successMessage"></span>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
