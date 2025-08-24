@@ -18,6 +18,7 @@
                 <p>Enter your credentials to view messages</p>
             </div>
             
+            <!-- Login Form -->
             <form id="loginForm" class="login-form">
                 <div class="input-group">
                     <label for="username">Username</label>
@@ -41,8 +42,45 @@
                 </button>
             </form>
             
+            <div class="login-divider">
+                <span>or</span>
+            </div>
+            
+            <!-- Registration Form -->
+            <form id="registerForm" class="register-form">
+                <div class="input-group">
+                    <label for="regUsername">New Username</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-user-plus"></i>
+                        <input type="text" id="regUsername" name="username" required minlength="3">
+                    </div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="regPassword">New Password</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="regPassword" name="password" required minlength="6">
+                    </div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="inviteCode">Invite Code</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-key"></i>
+                        <input type="text" id="inviteCode" name="inviteCode" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="register-btn">
+                    <i class="fas fa-user-plus"></i>
+                    Create Admin Account
+                </button>
+            </form>
+            
             <div class="login-footer">
                 <p>Default: admin / admin123</p>
+                <p class="invite-code-info">Invite Code: <code>ADMIN2024</code></p>
             </div>
         </div>
     </div>
