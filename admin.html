@@ -57,6 +57,10 @@
                     <p>All the wonderful thoughts from your community</p>
                 </div>
                 <div class="header-right">
+                    <div class="user-info">
+                        <span id="currentUser" class="current-user">👤 Admin</span>
+                        <span id="userRole" class="user-role">👑 Super Admin</span>
+                    </div>
                     <button id="logoutBtn" class="logout-btn">
                         <i class="fas fa-sign-out-alt"></i>
                         Logout
@@ -65,6 +69,23 @@
             </div>
         </header>
 
+        <!-- Admin Management Section (Super Admin Only) -->
+        <div id="adminManagementSection" class="admin-management-section hidden">
+            <div class="section-header">
+                <h2>👥 Admin Account Management</h2>
+                <button id="addAdminBtn" class="add-admin-btn">
+                    <i class="fas fa-user-plus"></i>
+                    Add New Admin
+                </button>
+            </div>
+            
+            <div class="admin-users-list">
+                <div id="adminUsersList" class="admin-users-grid">
+                    <!-- Admin users will be populated here -->
+                </div>
+            </div>
+        </div>
+
         <!-- Stats Cards -->
         <div class="stats-section">
             <div class="stat-card">
@@ -72,6 +93,14 @@
                 <div class="stat-content">
                     <h3 id="totalMessages">0</h3>
                     <p>Total Messages</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">📌</div>
+                <div class="stat-content">
+                    <h3 id="pinnedMessages">0</h3>
+                    <p>Pinned Messages</p>
                 </div>
             </div>
             
@@ -88,14 +117,6 @@
                 <div class="stat-content">
                     <h3 id="curiousMoods">0</h3>
                     <p>Curious Thoughts</p>
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-icon">🎉</div>
-                <div class="stat-content">
-                    <h3 id="excitedMoods">0</h3>
-                    <p>Excited Thoughts</p>
                 </div>
             </div>
         </div>
@@ -118,6 +139,12 @@
                     <option value="Sad">😢 Sad</option>
                     <option value="Bored">🥱 Bored</option>
                     <option value="Fine">🙂 Fine</option>
+                </select>
+                
+                <select id="pinFilter" class="pin-filter">
+                    <option value="">All Messages</option>
+                    <option value="pinned">📌 Pinned Only</option>
+                    <option value="unpinned">📝 Unpinned Only</option>
                 </select>
                 
                 <button id="refreshBtn" class="refresh-btn">
@@ -156,6 +183,35 @@
                 <div class="no-messages-icon">📭</div>
                 <h3>No messages yet</h3>
                 <p>When people start sharing thoughts, they'll appear here!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Admin Modal -->
+    <div id="addAdminModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>👤 Add New Admin</h3>
+                <button id="closeAddAdminModal" class="close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addAdminForm">
+                    <div class="input-group">
+                        <label for="newUsername">Username</label>
+                        <input type="text" id="newUsername" name="username" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="newPassword">Password</label>
+                        <input type="password" id="newPassword" name="password" required minlength="6">
+                        <small>Minimum 6 characters</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-actions">
+                <button id="cancelAddAdmin" class="cancel-btn">Cancel</button>
+                <button id="confirmAddAdmin" class="confirm-btn">Add Admin</button>
             </div>
         </div>
     </div>
