@@ -10,21 +10,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshBtn = document.getElementById('refreshBtn');
     const searchInput = document.getElementById('searchInput');
     const moodFilter = document.getElementById('moodFilter');
+    const pinFilter = document.getElementById('pinFilter');
     const sortNewest = document.getElementById('sortNewest');
     const sortOldest = document.getElementById('sortOldest');
     const messagesList = document.getElementById('messagesList');
     const loadingSpinner = document.getElementById('loadingSpinner');
     const noMessages = document.getElementById('noMessages');
     
+    // Admin management elements
+    const adminManagementSection = document.getElementById('adminManagementSection');
+    const addAdminBtn = document.getElementById('addAdminBtn');
+    const addAdminModal = document.getElementById('addAdminModal');
+    const closeAddAdminModal = document.getElementById('closeAddAdminModal');
+    const cancelAddAdmin = document.getElementById('cancelAddAdmin');
+    const confirmAddAdmin = document.getElementById('confirmAddAdmin');
+    const addAdminForm = document.getElementById('addAdminForm');
+    const adminUsersList = document.getElementById('adminUsersList');
+    
+    // User info elements
+    const currentUser = document.getElementById('currentUser');
+    const userRole = document.getElementById('userRole');
+    
     // Stats elements
     const totalMessages = document.getElementById('totalMessages');
+    const pinnedMessages = document.getElementById('pinnedMessages');
     const happyMoods = document.getElementById('happyMoods');
     const curiousMoods = document.getElementById('curiousMoods');
-    const excitedMoods = document.getElementById('excitedMoods');
     
     let allMessages = [];
     let filteredMessages = [];
     let currentSort = 'newest';
+    let currentUserInfo = null;
+    let isSuperAdmin = false;
     
     // Check authentication status on load
     checkAuthStatus();
@@ -35,8 +52,22 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshBtn.addEventListener('click', loadMessages);
     searchInput.addEventListener('input', filterMessages);
     moodFilter.addEventListener('change', filterMessages);
+    pinFilter.addEventListener('change', filterMessages);
     sortNewest.addEventListener('click', () => setSort('newest'));
     sortOldest.addEventListener('click', () => setSort('oldest'));
+    
+    // Admin management event listeners
+    addAdminBtn.addEventListener('click', () => addAdminModal.classList.remove('hidden'));
+    closeAddAdminModal.addEventListener('click', () => addAdminModal.classList.add('hidden'));
+    cancelAddAdmin.addEventListener('click', () => addAdminModal.classList.add('hidden'));
+    confirmAddAdmin.addEventListener('click', handleAddAdmin);
+    
+    // Close modal when clicking outside
+    addAdminModal.addEventListener('click', (e) => {
+        if (e.target === addAdminModal) {
+            addAdminModal.classList.add('hidden');
+        }
+    });
     
     // Authentication functions
     async function checkAuthStatus() {
@@ -47,14 +78,52 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (data.authenticated) {
+                await loadUserInfo();
                 showDashboard();
                 loadMessages();
+                if (isSuperAdmin) {
+                    loadAdminUsers();
+                }
             } else {
                 showLogin();
             }
         } catch (error) {
             console.error('Error checking auth status:', error);
             showLogin();
+        }
+    }
+    
+    async function loadUserInfo() {
+        try {
+            const response = await fetch(`${API_BASE}/admin/users`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const users = await response.json();
+                const currentUserData = users.find(user => user.id === currentUserInfo?.id);
+                if (currentUserData) {
+                    currentUserInfo = currentUserData;
+                    isSuperAdmin = currentUserData.is_super_admin === 1;
+                    updateUserDisplay();
+                }
+            }
+        } catch (error) {
+            console.error('Error loading user info:', error);
+        }
+    }
+    
+    function updateUserDisplay() {
+        if (currentUserInfo) {
+            currentUser.textContent = `👤 ${currentUserInfo.username}`;
+            userRole.textContent = isSuperAdmin ? '�� Super Admin' : '👤 Admin';
+            
+            // Show/hide admin management section
+            if (isSuperAdmin) {
+                adminManagementSection.classList.remove('hidden');
+            } else {
+                adminManagementSection.classList.add('hidden');
+            }
         }
     }
     
@@ -87,8 +156,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.success) {
                 showToast('success', 'Login successful! 🎉');
+                await loadUserInfo();
                 showDashboard();
                 loadMessages();
+                if (isSuperAdmin) {
+                    loadAdminUsers();
+                }
             } else {
                 showToast('error', data.error || 'Login failed');
             }
@@ -111,10 +184,123 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (response.ok) {
                 showToast('success', 'Logged out successfully! 👋');
+                currentUserInfo = null;
+                isSuperAdmin = false;
                 showLogin();
             }
         } catch (error) {
             console.error('Logout error:', error);
+        }
+    }
+    
+    // Admin management functions
+    async function handleAddAdmin() {
+        const formData = new FormData(addAdminForm);
+        const username = formData.get('username');
+        const password = formData.get('password');
+        
+        if (!username || !password) {
+            showToast('error', 'Please fill in all fields');
+            return;
+        }
+        
+        if (password.length < 6) {
+            showToast('error', 'Password must be at least 6 characters long');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ username, password })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('success', `Admin user "${username}" created successfully! 👤`);
+                addAdminModal.classList.add('hidden');
+                addAdminForm.reset();
+                loadAdminUsers();
+            } else {
+                showToast('error', data.error || 'Failed to create admin user');
+            }
+        } catch (error) {
+            console.error('Error creating admin user:', error);
+            showToast('error', 'Failed to create admin user');
+        }
+    }
+    
+    async function loadAdminUsers() {
+        if (!isSuperAdmin) return;
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/users`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const users = await response.json();
+                displayAdminUsers(users);
+            }
+        } catch (error) {
+            console.error('Error loading admin users:', error);
+        }
+    }
+    
+    function displayAdminUsers(users) {
+        const usersHTML = users.map(user => `
+            <div class="admin-user-card ${user.is_super_admin ? 'super-admin' : 'regular-admin'}">
+                <div class="admin-user-info">
+                    <div class="admin-user-avatar">${user.is_super_admin ? '👑' : '👤'}</div>
+                    <div class="admin-user-details">
+                        <h4>${user.username}</h4>
+                        <span class="admin-user-role">${user.is_super_admin ? 'Super Admin' : 'Admin'}</span>
+                        <small>Created: ${new Date(user.created_at).toLocaleDateString()}</small>
+                    </div>
+                </div>
+                <div class="admin-user-actions">
+                    ${!user.is_super_admin && user.id !== currentUserInfo?.id ? 
+                        `<button class="delete-admin-btn" onclick="deleteAdminUser(${user.id}, '${user.username}')" title="Delete admin user">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''
+                    }
+                </div>
+            </div>
+        `).join('');
+        
+        adminUsersList.innerHTML = usersHTML;
+    }
+    
+    // Pin message functions
+    async function togglePinMessage(messageId, isPinned) {
+        try {
+            const response = await fetch(`${API_BASE}/messages/${messageId}/pin`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ isPinned: !isPinned })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    showToast('success', `Message ${!isPinned ? 'pinned' : 'unpinned'} successfully! 📌`);
+                    loadMessages();
+                }
+            } else {
+                const errorData = await response.json();
+                showToast('error', errorData.error || 'Failed to update pin status');
+            }
+        } catch (error) {
+            console.error('Error toggling pin status:', error);
+            showToast('error', 'Failed to update pin status');
         }
     }
     
@@ -123,6 +309,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loginScreen.classList.remove('hidden');
         dashboard.classList.add('hidden');
         loginForm.reset();
+        currentUserInfo = null;
+        isSuperAdmin = false;
     }
     
     function showDashboard() {
@@ -180,26 +368,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function updateStats() {
         const total = allMessages.length;
+        const pinned = allMessages.filter(m => m.is_pinned === 1).length;
         const happy = allMessages.filter(m => m.mood === 'Happy').length;
         const curious = allMessages.filter(m => m.mood === 'Curious').length;
-        const excited = allMessages.filter(m => m.mood === 'Excited').length;
         
         totalMessages.textContent = total;
+        pinnedMessages.textContent = pinned;
         happyMoods.textContent = happy;
         curiousMoods.textContent = curious;
-        excitedMoods.textContent = excited;
     }
     
     function filterMessages() {
         const searchTerm = searchInput.value.toLowerCase();
         const selectedMood = moodFilter.value;
+        const selectedPinStatus = pinFilter.value;
         
         filteredMessages = allMessages.filter(message => {
             const matchesSearch = message.message.toLowerCase().includes(searchTerm) ||
                                 (message.name && message.name.toLowerCase().includes(searchTerm));
             const matchesMood = !selectedMood || message.mood === selectedMood;
+            const matchesPinStatus = !selectedPinStatus || 
+                                   (selectedPinStatus === 'pinned' && message.is_pinned === 1) ||
+                                   (selectedPinStatus === 'unpinned' && message.is_pinned === 0);
             
-            return matchesSearch && matchesMood;
+            return matchesSearch && matchesMood && matchesPinStatus;
         });
         
         displayMessages();
@@ -224,8 +416,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         noMessages.classList.add('hidden');
         
-        // Sort messages
+        // Sort messages - pinned first, then by timestamp
         const sortedMessages = [...filteredMessages].sort((a, b) => {
+            // First sort by pin status
+            if (a.is_pinned !== b.is_pinned) {
+                return b.is_pinned - a.is_pinned;
+            }
+            
+            // Then sort by timestamp
             const dateA = new Date(a.timestamp);
             const dateB = new Date(b.timestamp);
             return currentSort === 'newest' ? dateB - dateA : dateA - dateB;
@@ -239,16 +437,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function createMessageCard(message) {
         const timestamp = new Date(message.timestamp).toLocaleString();
         const moodEmoji = getMoodEmoji(message.mood);
+        const isPinned = message.is_pinned === 1;
         
         return `
-            <div class="message-card" data-id="${message.id}">
+            <div class="message-card ${isPinned ? 'pinned' : ''}" data-id="${message.id}">
                 <div class="message-header">
                     <div class="message-meta">
                         <span class="message-name">${message.name}</span>
                         <span class="message-mood">${moodEmoji} ${message.mood}</span>
+                        ${isPinned ? '<span class="pin-indicator">📌 Pinned</span>' : ''}
                     </div>
                     <div class="message-actions">
                         <span class="message-timestamp">${timestamp}</span>
+                        <button class="pin-btn ${isPinned ? 'pinned' : ''}" onclick="togglePinMessage(${message.id}, ${isPinned})" title="${isPinned ? 'Unpin message' : 'Pin message'}">
+                            <i class="fas fa-thumbtack"></i>
+                        </button>
                         <button class="delete-btn" onclick="deleteMessage(${message.id})" title="Delete message">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -302,6 +505,9 @@ document.addEventListener('DOMContentLoaded', () => {
         loadMessages();
     }, 30000);
     
+    // Global functions for onclick handlers
+    window.togglePinMessage = togglePinMessage;
+    
     // Delete message function (global scope for onclick)
     window.deleteMessage = async function(messageId) {
         // Store the message ID for deletion
@@ -352,6 +558,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         document.addEventListener('keydown', handleEscape);
+    };
+    
+    // Delete admin user function (global scope for onclick)
+    window.deleteAdminUser = async function(userId, username) {
+        if (!confirm(`Are you sure you want to delete admin user "${username}"? This action cannot be undone.`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    showToast('success', `Admin user "${username}" deleted successfully! 🗑️`);
+                    loadAdminUsers();
+                } else {
+                    showToast('error', result.error || 'Failed to delete admin user');
+                }
+            } else {
+                const errorData = await response.json();
+                showToast('error', errorData.error || 'Failed to delete admin user');
+            }
+        } catch (error) {
+            console.error('Error deleting admin user:', error);
+            showToast('error', 'Failed to delete admin user');
+        }
     };
     
     // Perform the actual deletion
