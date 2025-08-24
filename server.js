@@ -66,7 +66,8 @@ function createTables() {
         message TEXT NOT NULL,
         name TEXT,
         mood TEXT NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        is_pinned INTEGER DEFAULT 0
     )`, (err) => {
         if (err) {
             console.error('Error creating messages table:', err.message);
@@ -80,6 +81,7 @@ function createTables() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        is_super_admin INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => {
         if (err) {
@@ -104,12 +106,12 @@ function createDefaultAdmin() {
                 if (err) {
                     console.error('Error hashing password:', err.message);
                 } else {
-                    db.run('INSERT INTO admin_users (username, password_hash) VALUES (?, ?)', 
-                        [defaultUsername, hash], (err) => {
+                    db.run('INSERT INTO admin_users (username, password_hash, is_super_admin) VALUES (?, ?, ?)', 
+                        [defaultUsername, hash, 1], (err) => {
                         if (err) {
                             console.error('Error creating default admin:', err.message);
                         } else {
-                            console.log(`Default admin user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
+                            console.log(`Default super admin user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
                             console.log('⚠️  IMPORTANT: Change these credentials in production!');
                         }
                     });
@@ -168,12 +170,12 @@ app.post('/api/messages', (req, res) => {
     });
 });
 
-// Get all messages (admin only)
+// Get all messages (admin only) - Updated to handle pinned messages
 app.get('/api/messages', requireAuth, (req, res) => {
     console.log('Messages endpoint accessed by user:', req.session.userId);
     console.log('Session authenticated:', req.session.authenticated);
     
-    const sql = 'SELECT * FROM messages ORDER BY timestamp DESC';
+    const sql = 'SELECT * FROM messages ORDER BY is_pinned DESC, timestamp DESC';
     db.all(sql, [], (err, rows) => {
         if (err) {
             console.error('Error fetching messages:', err.message);
@@ -206,6 +208,38 @@ app.delete('/api/messages/:id', requireAuth, (req, res) => {
                 success: true, 
                 message: 'Message deleted successfully',
                 deletedId: messageId
+            });
+        }
+    });
+});
+
+// Pin/Unpin a message (admin only)
+app.put('/api/messages/:id/pin', requireAuth, (req, res) => {
+    const messageId = req.params.id;
+    const { isPinned } = req.body;
+    
+    if (!messageId || isNaN(messageId)) {
+        return res.status(400).json({ error: 'Invalid message ID' });
+    }
+    
+    if (typeof isPinned !== 'boolean') {
+        return res.status(400).json({ error: 'isPinned must be a boolean' });
+    }
+    
+    const sql = 'UPDATE messages SET is_pinned = ? WHERE id = ?';
+    db.run(sql, [isPinned ? 1 : 0, messageId], function(err) {
+        if (err) {
+            console.error('Error updating message pin status:', err.message);
+            res.status(500).json({ error: 'Failed to update message pin status' });
+        } else if (this.changes === 0) {
+            res.status(404).json({ error: 'Message not found' });
+        } else {
+            console.log(`Message ${messageId} ${isPinned ? 'pinned' : 'unpinned'} successfully`);
+            res.json({ 
+                success: true, 
+                message: `Message ${isPinned ? 'pinned' : 'unpinned'} successfully`,
+                messageId: messageId,
+                isPinned: isPinned
             });
         }
     });
@@ -270,6 +304,135 @@ app.get('/api/admin/status', (req, res) => {
     res.json({ 
         authenticated: !!req.session.authenticated,
         userId: req.session.userId 
+    });
+});
+
+// Admin registration (super admin only)
+app.post('/api/admin/register', requireAuth, (req, res) => {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    // Check if current user is super admin
+    db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
+        if (err) {
+            console.error('Error checking user permissions:', err.message);
+            res.status(500).json({ error: 'Failed to check permissions' });
+        } else if (!user || !user.is_super_admin) {
+            res.status(403).json({ error: 'Only super admins can create new accounts' });
+        } else {
+            // Check if username already exists
+            db.get('SELECT id FROM admin_users WHERE username = ?', [username], (err, existingUser) => {
+                if (err) {
+                    console.error('Error checking existing username:', err.message);
+                    res.status(500).json({ error: 'Failed to check username availability' });
+                } else if (existingUser) {
+                    res.status(409).json({ error: 'Username already exists' });
+                } else {
+                    // Create new admin user
+                    bcrypt.hash(password, 10, (err, hash) => {
+                        if (err) {
+                            console.error('Error hashing password:', err.message);
+                            res.status(500).json({ error: 'Failed to create user' });
+                        } else {
+                            db.run('INSERT INTO admin_users (username, password_hash, is_super_admin) VALUES (?, ?, ?)', 
+                                [username, hash, 0], (err) => {
+                                if (err) {
+                                    console.error('Error creating admin user:', err.message);
+                                    res.status(500).json({ error: 'Failed to create user' });
+                                } else {
+                                    console.log(`New admin user created: ${username}`);
+                                    res.json({ 
+                                        success: true, 
+                                        message: 'Admin user created successfully',
+                                        username: username
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+    });
+});
+
+// Get admin users list (super admin only)
+app.get('/api/admin/users', requireAuth, (req, res) => {
+    // Check if current user is super admin
+    db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
+        if (err) {
+            console.error('Error checking user permissions:', err.message);
+            res.status(500).json({ error: 'Failed to check permissions' });
+        } else if (!user || !user.is_super_admin) {
+            res.status(403).json({ error: 'Only super admins can view user list' });
+        } else {
+            const sql = 'SELECT id, username, is_super_admin, created_at FROM admin_users ORDER BY created_at DESC';
+            db.all(sql, [], (err, rows) => {
+                if (err) {
+                    console.error('Error fetching admin users:', err.message);
+                    res.status(500).json({ error: 'Failed to fetch admin users' });
+                } else {
+                    res.json(rows);
+                }
+            });
+        }
+    });
+});
+
+// Delete admin user (super admin only)
+app.delete('/api/admin/users/:id', requireAuth, (req, res) => {
+    const userId = req.params.id;
+    
+    if (!userId || isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    
+    // Check if current user is super admin
+    db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
+        if (err) {
+            console.error('Error checking user permissions:', err.message);
+            res.status(500).json({ error: 'Failed to check permissions' });
+        } else if (!user || !user.is_super_admin) {
+            res.status(403).json({ error: 'Only super admins can delete users' });
+        } else if (parseInt(userId) === req.session.userId) {
+            res.status(400).json({ error: 'Cannot delete your own account' });
+        } else {
+            // Check if target user is super admin
+            db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [userId], (err, targetUser) => {
+                if (err) {
+                    console.error('Error checking target user:', err.message);
+                    res.status(500).json({ error: 'Failed to check target user' });
+                } else if (!targetUser) {
+                    res.status(404).json({ error: 'User not found' });
+                } else if (targetUser.is_super_admin) {
+                    res.status(403).json({ error: 'Cannot delete super admin accounts' });
+                } else {
+                    // Delete the user
+                    db.run('DELETE FROM admin_users WHERE id = ?', [userId], function(err) {
+                        if (err) {
+                            console.error('Error deleting admin user:', err.message);
+                            res.status(500).json({ error: 'Failed to delete user' });
+                        } else if (this.changes === 0) {
+                            res.status(404).json({ error: 'User not found' });
+                        } else {
+                            console.log(`Admin user ${userId} deleted successfully`);
+                            res.json({ 
+                                success: true, 
+                                message: 'Admin user deleted successfully',
+                                deletedId: userId
+                            });
+                        }
+                    });
+                }
+            });
+        }
     });
 });
 
