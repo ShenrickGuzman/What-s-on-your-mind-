@@ -1,7 +1,7 @@
 {
   "name": "thoughts-website-backend",
   "version": "1.0.0",
-  "description": "Backend for thoughts website with admin panel",
+  "description": "Backend for thoughts website with admin panel, pin message functionality, and admin account management",
   "main": "server.js",
   "engines": {
     "node": ">=18.0.0"
@@ -21,7 +21,7 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["thoughts", "admin", "messages"],
+  "keywords": ["thoughts", "admin", "messages", "pin", "admin-management"],
   "author": "Your Name",
   "license": "MIT"
 }
