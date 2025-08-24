@@ -81,7 +81,7 @@ function createTables() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        is_super_admin INTEGER DEFAULT 0,
+        is_owner INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => {
         if (err) {
@@ -106,12 +106,12 @@ function createDefaultAdmin() {
                 if (err) {
                     console.error('Error hashing password:', err.message);
                 } else {
-                    db.run('INSERT INTO admin_users (username, password_hash, is_super_admin) VALUES (?, ?, ?)', 
+                    db.run('INSERT INTO admin_users (username, password_hash, is_owner) VALUES (?, ?, ?)', 
                         [defaultUsername, hash, 1], (err) => {
                         if (err) {
                             console.error('Error creating default admin:', err.message);
                         } else {
-                            console.log(`Default super admin user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
+                            console.log(`Default owner user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
                             console.log('⚠️  IMPORTANT: Change these credentials in production!');
                         }
                     });
@@ -320,12 +320,12 @@ app.post('/api/admin/register', requireAuth, (req, res) => {
     }
     
     // Check if current user is super admin
-    db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
+    db.get('SELECT is_owner FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
         if (err) {
             console.error('Error checking user permissions:', err.message);
             res.status(500).json({ error: 'Failed to check permissions' });
-        } else if (!user || !user.is_super_admin) {
-            res.status(403).json({ error: 'Only super admins can create new accounts' });
+        } else if (!user || !user.is_owner) {
+            res.status(403).json({ error: 'Only owners can create new accounts' });
         } else {
             // Check if username already exists
             db.get('SELECT id FROM admin_users WHERE username = ?', [username], (err, existingUser) => {
@@ -341,7 +341,7 @@ app.post('/api/admin/register', requireAuth, (req, res) => {
                             console.error('Error hashing password:', err.message);
                             res.status(500).json({ error: 'Failed to create user' });
                         } else {
-                            db.run('INSERT INTO admin_users (username, password_hash, is_super_admin) VALUES (?, ?, ?)', 
+                            db.run('INSERT INTO admin_users (username, password_hash, is_owner) VALUES (?, ?, ?)', 
                                 [username, hash, 0], (err) => {
                                 if (err) {
                                     console.error('Error creating admin user:', err.message);
@@ -399,7 +399,7 @@ app.post('/api/admin/self-register', (req, res) => {
                     console.error('Error hashing password:', err.message);
                     res.status(500).json({ error: 'Failed to create user' });
                 } else {
-                    db.run('INSERT INTO admin_users (username, password_hash, is_super_admin) VALUES (?, ?, ?)', 
+                    db.run('INSERT INTO admin_users (username, password_hash, is_owner) VALUES (?, ?, ?)', 
                         [username, hash, 0], (err) => {
                         if (err) {
                             console.error('Error creating admin user:', err.message);
@@ -422,14 +422,14 @@ app.post('/api/admin/self-register', (req, res) => {
 // Get admin users list (super admin only)
 app.get('/api/admin/users', requireAuth, (req, res) => {
     // Check if current user is super admin
-    db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
+    db.get('SELECT is_owner FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
         if (err) {
             console.error('Error checking user permissions:', err.message);
             res.status(500).json({ error: 'Failed to check permissions' });
-        } else if (!user || !user.is_super_admin) {
-            res.status(403).json({ error: 'Only super admins can view user list' });
+        } else if (!user || !user.is_owner) {
+            res.status(403).json({ error: 'Only owners can view user list' });
         } else {
-            const sql = 'SELECT id, username, is_super_admin, created_at FROM admin_users ORDER BY created_at DESC';
+            const sql = 'SELECT id, username, is_owner, created_at FROM admin_users ORDER BY created_at DESC';
             db.all(sql, [], (err, rows) => {
                 if (err) {
                     console.error('Error fetching admin users:', err.message);
@@ -451,24 +451,24 @@ app.delete('/api/admin/users/:id', requireAuth, (req, res) => {
     }
     
     // Check if current user is super admin
-    db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
+    db.get('SELECT is_owner FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
         if (err) {
             console.error('Error checking user permissions:', err.message);
             res.status(500).json({ error: 'Failed to check permissions' });
-        } else if (!user || !user.is_super_admin) {
-            res.status(403).json({ error: 'Only super admins can delete users' });
+        } else if (!user || !user.is_owner) {
+            res.status(403).json({ error: 'Only owners can delete users' });
         } else if (parseInt(userId) === req.session.userId) {
             res.status(400).json({ error: 'Cannot delete your own account' });
         } else {
             // Check if target user is super admin
-            db.get('SELECT is_super_admin FROM admin_users WHERE id = ?', [userId], (err, targetUser) => {
+            db.get('SELECT is_owner FROM admin_users WHERE id = ?', [userId], (err, targetUser) => {
                 if (err) {
                     console.error('Error checking target user:', err.message);
                     res.status(500).json({ error: 'Failed to check target user' });
                 } else if (!targetUser) {
                     res.status(404).json({ error: 'User not found' });
-                } else if (targetUser.is_super_admin) {
-                    res.status(403).json({ error: 'Cannot delete super admin accounts' });
+                } else if (targetUser.is_owner) {
+                    res.status(403).json({ error: 'Cannot delete owner accounts' });
                 } else {
                     // Delete the user
                     db.run('DELETE FROM admin_users WHERE id = ?', [userId], function(err) {
