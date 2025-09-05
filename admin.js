@@ -474,9 +474,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // Normalize pin flag from backend (handles boolean true/false and numeric 1/0)
+    function isPinnedFlag(message) {
+        const v = message && message.is_pinned;
+        return v === true || v === 1 || v === '1' || v === 't' || v === 'true';
+    }
+
     function updateStats() {
         const total = allMessages.length;
-        const pinned = allMessages.filter(m => m.is_pinned === 1).length;
+        const pinned = allMessages.filter(m => isPinnedFlag(m)).length;
         const happy = allMessages.filter(m => m.mood === 'Happy').length;
         const curious = allMessages.filter(m => m.mood === 'Curious').length;
         
@@ -495,9 +501,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const matchesSearch = message.message.toLowerCase().includes(searchTerm) ||
                                 (message.name && message.name.toLowerCase().includes(searchTerm));
             const matchesMood = !selectedMood || message.mood === selectedMood;
+            const pinned = isPinnedFlag(message);
             const matchesPinStatus = !selectedPinStatus || 
-                                   (selectedPinStatus === 'pinned' && message.is_pinned === 1) ||
-                                   (selectedPinStatus === 'unpinned' && message.is_pinned === 0);
+                                   (selectedPinStatus === 'pinned' && pinned) ||
+                                   (selectedPinStatus === 'unpinned' && !pinned);
             
             return matchesSearch && matchesMood && matchesPinStatus;
         });
@@ -527,8 +534,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sort messages - pinned first, then by timestamp
         const sortedMessages = [...filteredMessages].sort((a, b) => {
             // First sort by pin status
-            if (a.is_pinned !== b.is_pinned) {
-                return b.is_pinned - a.is_pinned;
+            const aPinned = isPinnedFlag(a) ? 1 : 0;
+            const bPinned = isPinnedFlag(b) ? 1 : 0;
+            if (aPinned !== bPinned) {
+                return bPinned - aPinned;
             }
             
             // Then sort by timestamp
@@ -545,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function createMessageCard(message) {
         const timestamp = new Date(message.timestamp).toLocaleString();
         const moodEmoji = getMoodEmoji(message.mood);
-        const isPinned = message.is_pinned === 1;
+        const isPinned = isPinnedFlag(message);
         
         return `
             <div class="message-card ${isPinned ? 'pinned' : ''}" data-id="${message.id}">
