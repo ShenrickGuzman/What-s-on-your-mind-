@@ -1,5 +1,5 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const cors = require('cors');
@@ -45,80 +45,78 @@ app.use(session({
     name: 'thoughts-website-session'
 }));
 
-// Database setup - Updated for Render
-const dbPath = process.env.NODE_ENV === 'production' 
-    ? '/tmp/messages.db'  // Use /tmp directory on Render
-    : './messages.db';
-
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database:', err.message);
-    } else {
-        console.log('Connected to SQLite database at:', dbPath);
-        createTables();
-    }
-});
-
-function createTables() {
-    // Messages table
-    db.run(`CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        message TEXT NOT NULL,
-        name TEXT,
-        mood TEXT NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        is_pinned INTEGER DEFAULT 0
-    )`, (err) => {
-        if (err) {
-            console.error('Error creating messages table:', err.message);
-        } else {
-            console.log('Messages table ready');
+// Database setup - PostgreSQL
+const connectionString = process.env.DATABASE_URL;
+const isRequireSsl = (process.env.PGSSLMODE || '').toLowerCase() === 'require';
+const pool = new Pool(
+    connectionString
+        ? {
+            connectionString,
+            ssl: isRequireSsl ? { rejectUnauthorized: false } : undefined
         }
+        : {
+            host: process.env.PGHOST || 'localhost',
+            port: parseInt(process.env.PGPORT || '5432', 10),
+            database: process.env.PGDATABASE || 'thoughts',
+            user: process.env.PGUSER || 'postgres',
+            password: process.env.PGPASSWORD || 'postgres',
+            ssl: isRequireSsl ? { rejectUnauthorized: false } : undefined
+        }
+);
+
+pool.connect()
+    .then((client) => {
+        client.release();
+        console.log('Connected to PostgreSQL');
+        return createTables();
+    })
+    .catch((err) => {
+        console.error('Error connecting to PostgreSQL:', err.message);
+        process.exit(1);
     });
 
-    // Admin users table
-    db.run(`CREATE TABLE IF NOT EXISTS admin_users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        is_owner INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`, (err) => {
-        if (err) {
-            console.error('Error creating admin_users table:', err.message);
-        } else {
-            console.log('Admin users table ready');
-            // Create default admin user if none exists
-            createDefaultAdmin();
-        }
-    });
+async function createTables() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS messages (
+            id SERIAL PRIMARY KEY,
+            message TEXT NOT NULL,
+            name TEXT,
+            mood TEXT NOT NULL,
+            timestamp TIMESTAMPTZ DEFAULT NOW(),
+            is_pinned BOOLEAN DEFAULT FALSE
+        )
+    `);
+    console.log('Messages table ready');
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS admin_users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_owner BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    console.log('Admin users table ready');
+    await createDefaultAdmin();
 }
 
-function createDefaultAdmin() {
+async function createDefaultAdmin() {
     const defaultUsername = process.env.ADMIN_USERNAME || 'admin';
     const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123'; // Change this in production!
-    
-    db.get('SELECT * FROM admin_users WHERE username = ?', [defaultUsername], (err, row) => {
-        if (err) {
-            console.error('Error checking admin user:', err.message);
-        } else if (!row) {
-            bcrypt.hash(defaultPassword, 10, (err, hash) => {
-                if (err) {
-                    console.error('Error hashing password:', err.message);
-                } else {
-                    db.run('INSERT INTO admin_users (username, password_hash, is_owner) VALUES (?, ?, ?)', 
-                        [defaultUsername, hash, 1], (err) => {
-                        if (err) {
-                            console.error('Error creating default admin:', err.message);
-                        } else {
-                            console.log(`Default owner user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
-                            console.log('⚠️  IMPORTANT: Change these credentials in production!');
-                        }
-                    });
-                }
-            });
+    try {
+        const { rows } = await pool.query('SELECT id FROM admin_users WHERE username = $1', [defaultUsername]);
+        if (rows.length === 0) {
+            const hash = await new Promise((resolve, reject) =>
+                bcrypt.hash(defaultPassword, 10, (err, h) => (err ? reject(err) : resolve(h)))
+            );
+            await pool.query('INSERT INTO admin_users (username, password_hash, is_owner) VALUES ($1, $2, $3)', [defaultUsername, hash, true]);
+            console.log(`Default owner user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
+            console.log('⚠️  IMPORTANT: Change these credentials in production!');
         }
-    });
+    } catch (err) {
+        console.error('Error ensuring default admin user:', err.message);
+    }
 }
 
 // Authentication middleware
@@ -155,19 +153,15 @@ app.post('/api/messages', (req, res) => {
         return res.status(400).json({ error: 'Message and mood are required' });
     }
     
-    const sql = 'INSERT INTO messages (message, name, mood) VALUES (?, ?, ?)';
-    db.run(sql, [message, name || 'Anonymous', mood], function(err) {
-        if (err) {
+    const sql = 'INSERT INTO messages (message, name, mood) VALUES ($1, $2, $3) RETURNING id';
+    pool.query(sql, [message, name || 'Anonymous', mood])
+        .then((result) => {
+            res.json({ success: true, messageId: result.rows[0].id, message: 'Message stored successfully' });
+        })
+        .catch((err) => {
             console.error('Error storing message:', err.message);
             res.status(500).json({ error: 'Failed to store message' });
-        } else {
-            res.json({ 
-                success: true, 
-                messageId: this.lastID,
-                message: 'Message stored successfully' 
-            });
-        }
-    });
+        });
 });
 
 // Get all messages (admin only) - Updated to handle pinned messages
@@ -176,15 +170,15 @@ app.get('/api/messages', requireAuth, (req, res) => {
     console.log('Session authenticated:', req.session.authenticated);
     
     const sql = 'SELECT * FROM messages ORDER BY is_pinned DESC, timestamp DESC';
-    db.all(sql, [], (err, rows) => {
-        if (err) {
-            console.error('Error fetching messages:', err.message);
-            res.status(500).json({ error: 'Failed to fetch messages', details: err.message });
-        } else {
+    pool.query(sql)
+        .then(({ rows }) => {
             console.log(`Successfully fetched ${rows.length} messages`);
             res.json(rows);
-        }
-    });
+        })
+        .catch((err) => {
+            console.error('Error fetching messages:', err.message);
+            res.status(500).json({ error: 'Failed to fetch messages', details: err.message });
+        });
 });
 
 // Delete a message (admin only)
@@ -195,22 +189,20 @@ app.delete('/api/messages/:id', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'Invalid message ID' });
     }
     
-    const sql = 'DELETE FROM messages WHERE id = ?';
-    db.run(sql, [messageId], function(err) {
-        if (err) {
+    const sql = 'DELETE FROM messages WHERE id = $1';
+    pool.query(sql, [messageId])
+        .then((result) => {
+            if (result.rowCount === 0) {
+                res.status(404).json({ error: 'Message not found' });
+            } else {
+                console.log(`Message ${messageId} deleted successfully`);
+                res.json({ success: true, message: 'Message deleted successfully', deletedId: messageId });
+            }
+        })
+        .catch((err) => {
             console.error('Error deleting message:', err.message);
             res.status(500).json({ error: 'Failed to delete message' });
-        } else if (this.changes === 0) {
-            res.status(404).json({ error: 'Message not found' });
-        } else {
-            console.log(`Message ${messageId} deleted successfully`);
-            res.json({ 
-                success: true, 
-                message: 'Message deleted successfully',
-                deletedId: messageId
-            });
-        }
-    });
+        });
 });
 
 // Pin/Unpin a message (admin only)
@@ -226,23 +218,20 @@ app.put('/api/messages/:id/pin', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'isPinned must be a boolean' });
     }
     
-    const sql = 'UPDATE messages SET is_pinned = ? WHERE id = ?';
-    db.run(sql, [isPinned ? 1 : 0, messageId], function(err) {
-        if (err) {
+    const sql = 'UPDATE messages SET is_pinned = $1 WHERE id = $2';
+    pool.query(sql, [isPinned, messageId])
+        .then((result) => {
+            if (result.rowCount === 0) {
+                res.status(404).json({ error: 'Message not found' });
+            } else {
+                console.log(`Message ${messageId} ${isPinned ? 'pinned' : 'unpinned'} successfully`);
+                res.json({ success: true, message: `Message ${isPinned ? 'pinned' : 'unpinned'} successfully`, messageId, isPinned });
+            }
+        })
+        .catch((err) => {
             console.error('Error updating message pin status:', err.message);
             res.status(500).json({ error: 'Failed to update message pin status' });
-        } else if (this.changes === 0) {
-            res.status(404).json({ error: 'Message not found' });
-        } else {
-            console.log(`Message ${messageId} ${isPinned ? 'pinned' : 'unpinned'} successfully`);
-            res.json({ 
-                success: true, 
-                message: `Message ${isPinned ? 'pinned' : 'unpinned'} successfully`,
-                messageId: messageId,
-                isPinned: isPinned
-            });
-        }
-    });
+        });
 });
 
 // Admin login
@@ -260,14 +249,14 @@ app.post('/api/admin/login', (req, res) => {
         return res.status(400).json({ error: 'Username and password are required' });
     }
     
-    db.get('SELECT * FROM admin_users WHERE username = ?', [username], (err, user) => {
-        if (err) {
-            console.error('Database error during login:', err.message);
-            res.status(500).json({ error: 'Login failed - database error' });
-        } else if (!user) {
-            console.log('Login failed: User not found:', username);
-            res.status(401).json({ error: 'Invalid credentials' });
-        } else {
+    pool.query('SELECT * FROM admin_users WHERE username = $1', [username])
+        .then(({ rows }) => {
+            const user = rows[0];
+            if (!user) {
+                console.log('Login failed: User not found:', username);
+                res.status(401).json({ error: 'Invalid credentials' });
+                return;
+            }
             console.log('User found, checking password...');
             bcrypt.compare(password, user.password_hash, (err, isMatch) => {
                 if (err) {
@@ -284,8 +273,11 @@ app.post('/api/admin/login', (req, res) => {
                     res.status(401).json({ error: 'Invalid credentials' });
                 }
             });
-        }
-    });
+        })
+        .catch((err) => {
+            console.error('Database error during login:', err.message);
+            res.status(500).json({ error: 'Login failed - database error' });
+        });
 });
 
 // Admin logout
@@ -320,47 +312,45 @@ app.post('/api/admin/register', requireAuth, (req, res) => {
     }
     
     // Check if current user is super admin
-    db.get('SELECT is_owner FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
-        if (err) {
-            console.error('Error checking user permissions:', err.message);
-            res.status(500).json({ error: 'Failed to check permissions' });
-        } else if (!user || !user.is_owner) {
-            res.status(403).json({ error: 'Only owners can create new accounts' });
-        } else {
-            // Check if username already exists
-            db.get('SELECT id FROM admin_users WHERE username = ?', [username], (err, existingUser) => {
-                if (err) {
-                    console.error('Error checking existing username:', err.message);
-                    res.status(500).json({ error: 'Failed to check username availability' });
-                } else if (existingUser) {
-                    res.status(409).json({ error: 'Username already exists' });
-                } else {
-                    // Create new admin user
-                    bcrypt.hash(password, 10, (err, hash) => {
-                        if (err) {
-                            console.error('Error hashing password:', err.message);
-                            res.status(500).json({ error: 'Failed to create user' });
-                        } else {
-                            db.run('INSERT INTO admin_users (username, password_hash, is_owner) VALUES (?, ?, ?)', 
-                                [username, hash, 0], (err) => {
-                                if (err) {
-                                    console.error('Error creating admin user:', err.message);
-                                    res.status(500).json({ error: 'Failed to create user' });
-                                } else {
-                                    console.log(`New admin user created: ${username}`);
-                                    res.json({ 
-                                        success: true, 
-                                        message: 'Admin user created successfully',
-                                        username: username
-                                    });
-                                }
-                            });
-                        }
-                    });
-                }
+    pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [req.session.userId])
+        .then(({ rows }) => {
+            const user = rows[0];
+            if (!user || !user.is_owner) {
+                res.status(403).json({ error: 'Only owners can create new accounts' });
+                return null;
+            }
+            return pool.query('SELECT id FROM admin_users WHERE username = $1', [username]);
+        })
+        .then((result) => {
+            if (!result) return; // response already sent
+            if (result.rows.length > 0) {
+                res.status(409).json({ error: 'Username already exists' });
+                return null;
+            }
+            return new Promise((resolve, reject) => {
+                bcrypt.hash(password, 10, async (err, hash) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        await pool.query('INSERT INTO admin_users (username, password_hash, is_owner) VALUES ($1, $2, $3)', [username, hash, false]);
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
             });
-        }
-    });
+        })
+        .then(() => {
+            res.json({ success: true, message: 'Admin user created successfully', username });
+        })
+        .catch((err) => {
+            if (!res.headersSent) {
+                console.error('Error creating admin user:', err.message);
+                res.status(500).json({ error: 'Failed to create user' });
+            }
+        });
 });
 
 // Self-registration for admin accounts (no auth required, but with security controls)
@@ -386,60 +376,57 @@ app.post('/api/admin/self-register', (req, res) => {
     }
     
     // Check if username already exists
-    db.get('SELECT id FROM admin_users WHERE username = ?', [username], (err, existingUser) => {
-        if (err) {
-            console.error('Error checking existing username:', err.message);
-            res.status(500).json({ error: 'Failed to check username availability' });
-        } else if (existingUser) {
-            res.status(409).json({ error: 'Username already exists' });
-        } else {
-            // Create new admin user (regular admin, not super admin)
-            bcrypt.hash(password, 10, (err, hash) => {
-                if (err) {
-                    console.error('Error hashing password:', err.message);
-                    res.status(500).json({ error: 'Failed to create user' });
-                } else {
-                    db.run('INSERT INTO admin_users (username, password_hash, is_owner) VALUES (?, ?, ?)', 
-                        [username, hash, 0], (err) => {
-                        if (err) {
-                            console.error('Error creating admin user:', err.message);
-                            res.status(500).json({ error: 'Failed to create user' });
-                        } else {
-                            console.log(`New admin user self-registered: ${username}`);
-                            res.json({ 
-                                success: true, 
-                                message: 'Admin account created successfully! You can now login.',
-                                username: username
-                            });
-                        }
-                    });
-                }
+    pool.query('SELECT id FROM admin_users WHERE username = $1', [username])
+        .then(({ rows }) => {
+            if (rows.length > 0) {
+                res.status(409).json({ error: 'Username already exists' });
+                return null;
+            }
+            return new Promise((resolve, reject) => {
+                bcrypt.hash(password, 10, async (err, hash) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        await pool.query('INSERT INTO admin_users (username, password_hash, is_owner) VALUES ($1, $2, $3)', [username, hash, false]);
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
             });
-        }
-    });
+        })
+        .then(() => {
+            res.json({ success: true, message: 'Admin account created successfully! You can now login.', username });
+        })
+        .catch((err) => {
+            if (!res.headersSent) {
+                console.error('Error during self-registration:', err.message);
+                res.status(500).json({ error: 'Failed to create user' });
+            }
+        });
 });
 
 // Get admin users list (super admin only)
 app.get('/api/admin/users', requireAuth, (req, res) => {
-    // Check if current user is super admin
-    db.get('SELECT is_owner FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
-        if (err) {
-            console.error('Error checking user permissions:', err.message);
-            res.status(500).json({ error: 'Failed to check permissions' });
-        } else if (!user || !user.is_owner) {
-            res.status(403).json({ error: 'Only owners can view user list' });
-        } else {
-            const sql = 'SELECT id, username, is_owner, created_at FROM admin_users ORDER BY created_at DESC';
-            db.all(sql, [], (err, rows) => {
-                if (err) {
-                    console.error('Error fetching admin users:', err.message);
-                    res.status(500).json({ error: 'Failed to fetch admin users' });
-                } else {
-                    res.json(rows);
-                }
-            });
-        }
-    });
+    pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [req.session.userId])
+        .then(({ rows }) => {
+            const user = rows[0];
+            if (!user || !user.is_owner) {
+                res.status(403).json({ error: 'Only owners can view user list' });
+                return null;
+            }
+            return pool.query('SELECT id, username, is_owner, created_at FROM admin_users ORDER BY created_at DESC');
+        })
+        .then((result) => {
+            if (!result) return; // response already sent
+            res.json(result.rows);
+        })
+        .catch((err) => {
+            console.error('Error fetching admin users:', err.message);
+            res.status(500).json({ error: 'Failed to fetch admin users' });
+        });
 });
 
 // Delete admin user (super admin only)
@@ -505,13 +492,12 @@ app.listen(PORT, () => {
 });
 
 // Graceful shutdown
-process.on('SIGINT', () => {
-    db.close((err) => {
-        if (err) {
-            console.error('Error closing database:', err.message);
-        } else {
-            console.log('Database connection closed');
-        }
-        process.exit(0);
-    });
+process.on('SIGINT', async () => {
+    try {
+        await pool.end();
+        console.log('Database connection pool closed');
+    } catch (err) {
+        console.error('Error closing database pool:', err.message);
+    }
+    process.exit(0);
 });
