@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: thoughts-website
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://your-app-name.onrender.com
+      # Uncomment and set your managed PostgreSQL connection string
+      # - key: DATABASE_URL
+      #   sync: false
+      #   value: postgres://USER:PASSWORD@HOST:PORT/DBNAME
+      # If your provider requires SSL
+      # - key: PGSSLMODE
+      #   value: require
+    healthCheckPath: /
+    autoDeploy: true
