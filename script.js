@@ -204,15 +204,16 @@ document.addEventListener('DOMContentLoaded', () => {
 			};
 
 			if (visibility === 'public') {
-				// Save to localStorage for public.html
-				const publicMessages = JSON.parse(localStorage.getItem('publicMessages') || '[]');
-				publicMessages.unshift({
-					message: payload.message,
-					name: payload.name,
-					mood: payload.mood,
-					timestamp: Date.now()
+				// Send to backend public messages endpoint
+				await fetch('/api/public-messages', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						message: payload.message,
+						name: payload.name,
+						mood: payload.mood
+					})
 				});
-				localStorage.setItem('publicMessages', JSON.stringify(publicMessages));
 			} else {
 				// Private: send to backend (admin)
 				await submitToBackend(payload);
