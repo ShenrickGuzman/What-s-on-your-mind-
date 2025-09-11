@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
 	const previewText = document.getElementById('previewText');
 	const vibeEmoji = document.getElementById('vibeEmoji');
 	const faces = vibeEmoji ? Array.from(vibeEmoji.querySelectorAll('.face')) : [];
+
+	// Visibility selector
+	const visibilityPublic = document.getElementById('visibilityPublic');
+	const visibilityPrivate = document.getElementById('visibilityPrivate');
 	
 	// Theme toggle
 	const themeToggle = document.getElementById('themeToggle');
@@ -188,12 +192,31 @@ document.addEventListener('DOMContentLoaded', () => {
 		submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
 		submitBtn.disabled = true;
 
+		// Determine visibility
+		const visibility = visibilityPublic && visibilityPublic.checked ? 'public' : 'private';
+
 		try {
-			await submitToBackend({
+			const payload = {
 				message,
 				name: anonToggle.checked ? 'Anonymous' : (nameInput.value || 'Anonymous'),
-				mood: moodInput.value || 'Happy'
-			});
+				mood: moodInput.value || 'Happy',
+				visibility
+			};
+
+			if (visibility === 'public') {
+				// Save to localStorage for public.html
+				const publicMessages = JSON.parse(localStorage.getItem('publicMessages') || '[]');
+				publicMessages.unshift({
+					message: payload.message,
+					name: payload.name,
+					mood: payload.mood,
+					timestamp: Date.now()
+				});
+				localStorage.setItem('publicMessages', JSON.stringify(publicMessages));
+			} else {
+				// Private: send to backend (admin)
+				await submitToBackend(payload);
+			}
 
 			showSuccess();
 			thoughtForm.reset();
