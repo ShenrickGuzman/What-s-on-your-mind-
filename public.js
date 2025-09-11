@@ -30,13 +30,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         showNoMessages(false);
+        // Mood to emoji map
+        const moodEmojis = {
+            'Happy': '😀',
+            'Curious': '🤔',
+            'Stressed': '😵‍💫',
+            'Excited': '🎉',
+            'In love': '😍',
+            'Sad': '😢',
+            'Bored': '🥱',
+            'Fine': '🙂'
+        };
         messages.forEach(msg => {
             const div = document.createElement('div');
             div.className = 'message-card';
+            const mood = msg.mood || '';
+            const emoji = moodEmojis[mood] || '';
             div.innerHTML = `
                 <div class="message-header">
-                    <span class="message-mood">${msg.mood ? msg.mood : ''}</span>
                     <span class="message-name">${msg.name ? msg.name : 'Anonymous'}</span>
+                    <span class="message-mood">${emoji} ${mood}</span>
                     <span class="message-date">${msg.created_at ? new Date(msg.created_at).toLocaleString() : ''}</span>
                 </div>
                 <div class="message-text">${msg.message}</div>
