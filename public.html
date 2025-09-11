@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Public Thoughts ✨</title>
+	<link rel="stylesheet" href="styles.css">
+	<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&family=Fredoka:wght@400;600;700&family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body>
+	<div class="container">
+		<header class="header">
+			<h1 class="title">Public Thoughts <span class="sparkles">✨</span></h1>
+			<p class="subtitle">See what everyone has shared publicly!</p>
+		</header>
+		<main class="main-content">
+			<div id="publicMessages" class="public-messages"></div>
+		</main>
+		<footer class="footer">
+			<p>Made with <i class="fas fa-heart"></i> by SHEN ✨</p>
+		</footer>
+	</div>
+	<script>
+	// Load public messages from localStorage
+	document.addEventListener('DOMContentLoaded', function() {
+		const container = document.getElementById('publicMessages');
+		const messages = JSON.parse(localStorage.getItem('publicMessages') || '[]');
+		if (messages.length === 0) {
+			container.innerHTML = '<p>No public thoughts yet. Be the first to share! 🎉</p>';
+			return;
+		}
+		container.innerHTML = messages.map(msg => `
+			<div class="public-message">
+				<div class="public-meta">
+					<span class="public-mood">${msg.mood ? msg.mood : ''}</span>
+					<span class="public-name">${msg.name ? msg.name : 'Anonymous'}</span>
+				</div>
+				<div class="public-text">${msg.message}</div>
+			</div>
+		`).join('');
+	});
+	</script>
+</body>
+</html>
