@@ -3,43 +3,102 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Public Thoughts ✨</title>
-	<link rel="stylesheet" href="styles.css">
+	<title>Public Thoughts Dashboard</title>
+	<link rel="stylesheet" href="admin-styles.css">
 	<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&family=Fredoka:wght@400;600;700&family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 <body>
-	<div class="container">
-		<header class="header">
-			<h1 class="title">Public Thoughts <span class="sparkles">✨</span></h1>
-			<p class="subtitle">See what everyone has shared publicly!</p>
-		</header>
-		<main class="main-content">
-			<div id="publicMessages" class="public-messages"></div>
-		</main>
-		<footer class="footer">
-			<p>Made with <i class="fas fa-heart"></i> by SHEN ✨</p>
-		</footer>
-	</div>
-	<script>
-	// Load public messages from localStorage
-	document.addEventListener('DOMContentLoaded', function() {
-		const container = document.getElementById('publicMessages');
-		const messages = JSON.parse(localStorage.getItem('publicMessages') || '[]');
-		if (messages.length === 0) {
-			container.innerHTML = '<p>No public thoughts yet. Be the first to share! 🎉</p>';
-			return;
-		}
-		container.innerHTML = messages.map(msg => `
-			<div class="public-message">
-				<div class="public-meta">
-					<span class="public-mood">${msg.mood ? msg.mood : ''}</span>
-					<span class="public-name">${msg.name ? msg.name : 'Anonymous'}</span>
+	<div id="dashboard" class="dashboard">
+		<!-- Header -->
+		<header class="dashboard-header">
+			<div class="header-content">
+				<div class="header-left">
+					<h1>Public Thoughts 💭</h1>
+					<p>See what everyone has shared publicly</p>
 				</div>
-				<div class="public-text">${msg.message}</div>
 			</div>
-		`).join('');
-	});
-	</script>
+		</header>
+
+		<!-- Stats Cards -->
+		<div class="stats-section">
+			<div class="stat-card">
+				<div class="stat-icon">💭</div>
+				<div class="stat-content">
+					<h3 id="totalMessages">0</h3>
+					<p>Total Messages</p>
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-icon">😊</div>
+				<div class="stat-content">
+					<h3 id="happyMoods">0</h3>
+					<p>Happy Thoughts</p>
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-icon">🤔</div>
+				<div class="stat-content">
+					<h3 id="curiousMoods">0</h3>
+					<p>Curious Thoughts</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- Filters and Search -->
+		<div class="controls-section">
+			<div class="search-box">
+				<i class="fas fa-search"></i>
+				<input type="text" id="searchInput" placeholder="Search messages...">
+			</div>
+			<div class="filter-controls">
+				<select id="moodFilter" class="mood-filter">
+					<option value="">All Moods</option>
+					<option value="Happy">😀 Happy</option>
+					<option value="Curious">🤔 Curious</option>
+					<option value="Stressed">😵‍💫 Stressed</option>
+					<option value="Excited">🎉 Excited</option>
+					<option value="In love">😍 In love</option>
+					<option value="Sad">😢 Sad</option>
+					<option value="Bored">🥱 Bored</option>
+					<option value="Fine">🙂 Fine</option>
+				</select>
+				<button id="refreshBtn" class="refresh-btn">
+					<i class="fas fa-sync-alt"></i>
+					Refresh
+				</button>
+			</div>
+		</div>
+
+		<!-- Messages List -->
+		<div class="messages-section">
+			<div class="messages-header">
+				<h2>Recent Public Messages</h2>
+				<div class="sort-controls">
+					<button id="sortNewest" class="sort-btn active" data-sort="newest">
+						<i class="fas fa-clock"></i>
+						Newest First
+					</button>
+					<button id="sortOldest" class="sort-btn" data-sort="oldest">
+						<i class="fas fa-history"></i>
+						Oldest First
+					</button>
+				</div>
+			</div>
+			<div id="messagesList" class="messages-list">
+				<!-- Messages will be populated here -->
+			</div>
+			<div id="loadingSpinner" class="loading-spinner hidden">
+				<div class="spinner"></div>
+				<p>Loading messages...</p>
+			</div>
+			<div id="noMessages" class="no-messages hidden">
+				<div class="no-messages-icon">📭</div>
+				<h3>No public messages yet</h3>
+				<p>When people start sharing thoughts, they'll appear here!</p>
+			</div>
+		</div>
+	</div>
+	<script src="public.js"></script>
 </body>
 </html>
