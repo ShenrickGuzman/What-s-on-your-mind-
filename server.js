@@ -98,6 +98,18 @@ async function createTables() {
         )
     `);
     console.log('Admin users table ready');
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS public_messages (
+            id SERIAL PRIMARY KEY,
+            name TEXT,
+            mood TEXT,
+            message TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    console.log('Public messages table ready');
+
     await createDefaultAdmin();
 }
 
@@ -164,6 +176,23 @@ app.post('/api/messages', (req, res) => {
         });
 });
 
+// Store a new public message
+app.post('/api/public-messages', (req, res) => {
+    const { message, name, mood } = req.body;
+    if (!message) {
+        return res.status(400).json({ error: 'Message is required' });
+    }
+    const sql = 'INSERT INTO public_messages (message, name, mood) VALUES ($1, $2, $3) RETURNING id';
+    pool.query(sql, [message, name || 'Anonymous', mood || ''])
+        .then((result) => {
+            res.json({ success: true, messageId: result.rows[0].id });
+        })
+        .catch((err) => {
+            console.error('Error storing public message:', err.message);
+            res.status(500).json({ error: 'Failed to store public message' });
+        });
+});
+
 // Get all messages (admin only) - Updated to handle pinned messages
 app.get('/api/messages', requireAuth, (req, res) => {
     console.log('Messages endpoint accessed by user:', req.session.userId);
@@ -178,6 +207,17 @@ app.get('/api/messages', requireAuth, (req, res) => {
         .catch((err) => {
             console.error('Error fetching messages:', err.message);
             res.status(500).json({ error: 'Failed to fetch messages', details: err.message });
+        });
+});
+
+// Get all public messages
+app.get('/api/public-messages', (req, res) => {
+    const sql = 'SELECT * FROM public_messages ORDER BY created_at DESC LIMIT 100';
+    pool.query(sql)
+        .then(({ rows }) => res.json(rows))
+        .catch((err) => {
+            console.error('Error fetching public messages:', err.message);
+            res.status(500).json({ error: 'Failed to fetch public messages' });
         });
 });
 
