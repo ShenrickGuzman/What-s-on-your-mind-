@@ -1,3 +1,37 @@
+// Admin: Get all pending signup requests
+app.get('/api/auth/signup-requests', async (req, res) => {
+    // TODO: Add admin authentication check
+    const { rows } = await pool.query('SELECT * FROM signup_requests WHERE status = $1 ORDER BY created_at ASC', ['pending']);
+    res.json(rows);
+});
+
+// Admin: Approve signup request
+app.post('/api/auth/signup-requests/:id/approve', async (req, res) => {
+    // TODO: Add admin authentication check
+    const id = req.params.id;
+    // Get the request
+    const { rows } = await pool.query('SELECT * FROM signup_requests WHERE id = $1', [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Request not found' });
+    const reqData = rows[0];
+    // Check if user already exists
+    const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [reqData.username, reqData.gmail]);
+    if (userExists.rows.length > 0) {
+        await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['declined', id]);
+        return res.status(409).json({ error: 'User or Gmail already exists' });
+    }
+    // Create user
+    await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [reqData.username, reqData.password_hash, reqData.gmail]);
+    await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['approved', id]);
+    res.json({ success: true });
+});
+
+// Admin: Decline signup request
+app.post('/api/auth/signup-requests/:id/decline', async (req, res) => {
+    // TODO: Add admin authentication check
+    const id = req.params.id;
+    await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['declined', id]);
+    res.json({ success: true });
+});
 const express = require('express');
 const { Pool } = require('pg');
 
@@ -547,36 +581,41 @@ const bcrypt = require('bcryptjs');
 
 // --- User Auth System ---
 
-// Ensure users and verified_gmails tables exist
+// Ensure users, signup_requests, and verified_gmails tables exist
 pool.query(`
 CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  gmail TEXT UNIQUE NOT NULL
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    gmail TEXT UNIQUE NOT NULL
+);
+CREATE TABLE IF NOT EXISTS signup_requests (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    gmail TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS verified_gmails (
-  gmail TEXT PRIMARY KEY
+    gmail TEXT PRIMARY KEY
 );
 `).catch(console.error);
 
-// Signup endpoint
+// Signup endpoint (approval system)
 app.post('/api/auth/signup', async (req, res) => {
     const { username, password, gmail } = req.body;
     if (!username || !password || !gmail) return res.status(400).json({ error: 'All fields required' });
 
-    // Check if gmail is verified
-    const { rows } = await pool.query('SELECT gmail FROM verified_gmails WHERE gmail = $1', [gmail]);
-    if (rows.length === 0) return res.status(403).json({ error: 'Gmail not verified' });
-
-    // Check if user exists
+    // Check if username or gmail already exists in users or signup_requests (pending)
     const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [username, gmail]);
     if (userExists.rows.length > 0) return res.status(409).json({ error: 'User or Gmail already exists' });
+    const pendingExists = await pool.query('SELECT id FROM signup_requests WHERE (username = $1 OR gmail = $2) AND status = $3', [username, gmail, 'pending']);
+    if (pendingExists.rows.length > 0) return res.status(409).json({ error: 'A sign up request for this username or gmail is already pending approval.' });
 
     const hash = await bcrypt.hash(password, 10);
-    await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [username, hash, gmail]);
-    req.session.user = { username, gmail };
-    res.json({ success: true });
+    await pool.query('INSERT INTO signup_requests (username, password_hash, gmail, status) VALUES ($1, $2, $3, $4)', [username, hash, gmail, 'pending']);
+    res.json({ success: true, message: 'Sign up request sent, wait for the admin to approve it.' });
 });
 
 // Signin endpoint
