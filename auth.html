@@ -228,6 +228,9 @@
             <input type="password" id="signinPassword" placeholder="Password" required autocomplete="current-password">
             <button type="submit" class="auth-btn">🎟️ Sign in</button>
             <div class="auth-error" id="signinError"></div>
+            <div style="margin-top:8px;">
+                <span class="switch-link" id="forgotPasswordLink">Forgot password?</span>
+            </div>
         </form>
         <form class="auth-form" id="signupForm" style="display:none;">
             <input type="text" id="signupUsername" placeholder="Username" required autocomplete="username">
@@ -240,6 +243,29 @@
         <div class="welcome-msg" id="welcomeMsg">
             👋 Welcome back, Margaret! 🌟<br>
             <span>Don't have an account yet? <span class="switch-link" id="switchToSignUp">Sign up now 🐱‍🏍</span></span>
+        </div>
+        <!-- Forgot Password Modal -->
+        <div id="forgotPasswordModal" style="display:none;position:fixed;z-index:1002;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.18);align-items:center;justify-content:center;">
+            <div style="background:#fff;border-radius:22px;max-width:340px;width:90vw;padding:32px 18px 22px 18px;box-shadow:0 8px 32px rgba(124,77,255,0.13);margin:auto;position:relative;">
+                <button id="closeForgotModal" style="position:absolute;top:10px;right:16px;background:none;border:none;font-size:1.3rem;color:#7c4dff;cursor:pointer;">&times;</button>
+                <h2 style="font-family:'Fredoka One',cursive;font-size:1.3rem;color:#7c4dff;margin-bottom:10px;">Reset Password</h2>
+                <form id="forgotForm">
+                    <input type="email" id="forgotGmail" placeholder="Enter your Gmail" required style="width:100%;margin-bottom:12px;">
+                    <button type="submit" class="auth-btn" style="width:100%;">Send Reset Link</button>
+                    <div class="auth-error" id="forgotError"></div>
+                    <div class="auth-success" id="forgotSuccess"></div>
+                </form>
+            </div>
+        </div>
+        <!-- Reset Password Form (shows if resetToken in URL) -->
+        <div id="resetPasswordSection" style="display:none;margin-top:18px;">
+            <h2 style="font-family:'Fredoka One',cursive;font-size:1.3rem;color:#7c4dff;margin-bottom:10px;">Set New Password</h2>
+            <form id="resetForm">
+                <input type="password" id="resetPassword" placeholder="New password" required style="width:100%;margin-bottom:12px;">
+                <button type="submit" class="auth-btn" style="width:100%;">Reset Password</button>
+                <div class="auth-error" id="resetError"></div>
+                <div class="auth-success" id="resetSuccess"></div>
+            </form>
         </div>
     </div>
     <script src="auth.js"></script>
@@ -283,6 +309,94 @@
             }, 10);
         };
         if (switchToSignUp) switchToSignUp.onclick = () => tabSignup.click();
+    });
+    // Forgot password UI logic
+    document.addEventListener('DOMContentLoaded', () => {
+        const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+        const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+        const closeForgotModal = document.getElementById('closeForgotModal');
+        const forgotForm = document.getElementById('forgotForm');
+        const forgotGmail = document.getElementById('forgotGmail');
+        const forgotError = document.getElementById('forgotError');
+        const forgotSuccess = document.getElementById('forgotSuccess');
+        const resetSection = document.getElementById('resetPasswordSection');
+        const resetForm = document.getElementById('resetForm');
+        const resetPassword = document.getElementById('resetPassword');
+        const resetError = document.getElementById('resetError');
+        const resetSuccess = document.getElementById('resetSuccess');
+
+        if (forgotPasswordLink) forgotPasswordLink.onclick = () => {
+            forgotPasswordModal.style.display = 'flex';
+            forgotError.textContent = '';
+            forgotSuccess.textContent = '';
+            forgotGmail.value = '';
+        };
+        if (closeForgotModal) closeForgotModal.onclick = () => {
+            forgotPasswordModal.style.display = 'none';
+        };
+        if (forgotForm) forgotForm.onsubmit = async (e) => {
+            e.preventDefault();
+            forgotError.textContent = '';
+            forgotSuccess.textContent = '';
+            const gmail = forgotGmail.value.trim();
+            if (!gmail) {
+                forgotError.textContent = 'Please enter your Gmail.';
+                return;
+            }
+            try {
+                const res = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gmail })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    forgotSuccess.textContent = 'If your Gmail is registered, a reset link has been sent.';
+                } else {
+                    forgotError.textContent = data.error || 'Something went wrong.';
+                }
+            } catch (err) {
+                forgotError.textContent = 'Network error.';
+            }
+        };
+        // Show reset password form if resetToken in URL
+        function getQueryParam(name) {
+            const url = new URL(window.location.href);
+            return url.searchParams.get(name);
+        }
+        const resetToken = getQueryParam('resetToken');
+        if (resetToken) {
+            document.querySelector('.auth-tabs').style.display = 'none';
+            document.getElementById('signinForm').style.display = 'none';
+            document.getElementById('signupForm').style.display = 'none';
+            resetSection.style.display = '';
+        }
+        if (resetForm) resetForm.onsubmit = async (e) => {
+            e.preventDefault();
+            resetError.textContent = '';
+            resetSuccess.textContent = '';
+            const password = resetPassword.value;
+            if (!password || password.length < 6) {
+                resetError.textContent = 'Password must be at least 6 characters.';
+                return;
+            }
+            try {
+                const res = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: resetToken, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    resetSuccess.textContent = 'Password reset! You can now sign in.';
+                    setTimeout(() => { window.location.href = 'auth.html'; }, 1800);
+                } else {
+                    resetError.textContent = data.error || 'Something went wrong.';
+                }
+            } catch (err) {
+                resetError.textContent = 'Network error.';
+            }
+        };
     });
     </script>
 </body>
