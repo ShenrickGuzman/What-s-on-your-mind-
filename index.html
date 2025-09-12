@@ -275,5 +275,12 @@
 	</div>
 
 	<script src="script.js"></script>
+	<script>
+fetch('/api/auth/status')
+  .then(res => res.json())
+  .then(data => {
+    if (!data.authenticated) window.location.href = 'auth.html';
+  });
+</script>
 </body>
 </html>
