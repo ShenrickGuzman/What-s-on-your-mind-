@@ -617,6 +617,45 @@ app.get('/api/auth/signup-requests', requireAuth, async (req, res) => {
     }
 });
 
+// Approve signup request (admin only)
+app.post('/api/auth/signup-requests/:id/approve', requireAuth, async (req, res) => {
+    const id = req.params.id;
+    try {
+        // Get the signup request
+        const { rows } = await pool.query('SELECT * FROM signup_requests WHERE id = $1 AND status = $2', [id, 'pending']);
+        if (rows.length === 0) return res.status(404).json({ error: 'Signup request not found or already processed' });
+        const request = rows[0];
+        // Check if username or gmail already exists in users
+        const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [request.username, request.gmail]);
+        if (userExists.rows.length > 0) {
+            // Mark as declined if already exists
+            await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['declined', id]);
+            return res.status(409).json({ error: 'User or Gmail already exists. Request declined.' });
+        }
+        // Insert into users
+        await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [request.username, request.password_hash, request.gmail]);
+        // Mark request as approved
+        await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['approved', id]);
+        res.json({ success: true, message: 'Signup request approved and user created.' });
+    } catch (err) {
+        console.error('Error approving signup request:', err.message);
+        res.status(500).json({ error: 'Failed to approve signup request' });
+    }
+});
+
+// Decline signup request (admin only)
+app.post('/api/auth/signup-requests/:id/decline', requireAuth, async (req, res) => {
+    const id = req.params.id;
+    try {
+        const { rowCount } = await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2 AND status = $3', ['declined', id, 'pending']);
+        if (rowCount === 0) return res.status(404).json({ error: 'Signup request not found or already processed' });
+        res.json({ success: true, message: 'Signup request declined.' });
+    } catch (err) {
+        console.error('Error declining signup request:', err.message);
+        res.status(500).json({ error: 'Failed to decline signup request' });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
