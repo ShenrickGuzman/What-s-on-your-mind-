@@ -1,3 +1,36 @@
+/* All Users Section Styles */
+.all-users-section {
+    margin: 32px 0 0 0;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    padding: 24px 32px 32px 32px;
+}
+.all-users-section .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+.all-users-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.all-user-card {
+    background: #f7f7fa;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    padding: 16px 20px;
+    min-width: 220px;
+    font-size: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.all-user-card b {
+    color: #333;
+}
 /* Reset and base styles */
 * {
     margin: 0;
