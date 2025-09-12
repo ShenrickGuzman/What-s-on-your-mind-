@@ -1,37 +1,6 @@
-// Admin: Get all pending signup requests
-app.get('/api/auth/signup-requests', async (req, res) => {
-    // TODO: Add admin authentication check
-    const { rows } = await pool.query('SELECT * FROM signup_requests WHERE status = $1 ORDER BY created_at ASC', ['pending']);
-    res.json(rows);
-});
-
-// Admin: Approve signup request
-app.post('/api/auth/signup-requests/:id/approve', async (req, res) => {
-    // TODO: Add admin authentication check
-    const id = req.params.id;
-    // Get the request
-    const { rows } = await pool.query('SELECT * FROM signup_requests WHERE id = $1', [id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Request not found' });
-    const reqData = rows[0];
-    // Check if user already exists
-    const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [reqData.username, reqData.gmail]);
-    if (userExists.rows.length > 0) {
-        await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['declined', id]);
-        return res.status(409).json({ error: 'User or Gmail already exists' });
-    }
-    // Create user
-    await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [reqData.username, reqData.password_hash, reqData.gmail]);
-    await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['approved', id]);
-    res.json({ success: true });
-});
-
-// Admin: Decline signup request
-app.post('/api/auth/signup-requests/:id/decline', async (req, res) => {
-    // TODO: Add admin authentication check
-    const id = req.params.id;
-    await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['declined', id]);
-    res.json({ success: true });
-});
+// ...existing code...
+// Place the signup requests endpoints AFTER app is initialized (after 'const app = express();')
+// ...existing code...
 const express = require('express');
 const { Pool } = require('pg');
 
