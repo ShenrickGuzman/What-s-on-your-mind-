@@ -247,7 +247,7 @@ body {
 
 /* Dashboard */
 .dashboard {
-    min-height: 100vh;
+    min-height: 0;
     background: #f7fafc;
 }
 
@@ -468,7 +468,7 @@ body {
 /* Stats Section */
 .stats-section {
     max-width: 1200px;
-    margin: 30px auto;
+    margin: 0 auto;
     padding: 0 20px;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
