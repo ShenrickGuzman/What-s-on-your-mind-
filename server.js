@@ -470,17 +470,8 @@ app.post('/api/admin/self-register', (req, res) => {
 
 // Get admin users list (super admin only)
 app.get('/api/admin/users', requireAuth, (req, res) => {
-    pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [req.session.userId])
-        .then(({ rows }) => {
-            const user = rows[0];
-            if (!user || !user.is_owner) {
-                res.status(403).json({ error: 'Only owners can view user list' });
-                return null;
-            }
-            return pool.query('SELECT id, username, is_owner, created_at FROM admin_users ORDER BY created_at DESC');
-        })
+    pool.query('SELECT id, username, is_owner, created_at FROM admin_users ORDER BY created_at DESC')
         .then((result) => {
-            if (!result) return; // response already sent
             res.json(result.rows);
         })
         .catch((err) => {
