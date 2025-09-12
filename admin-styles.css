@@ -1171,6 +1171,115 @@ body {
     box-shadow: 0 8px 20px rgba(229, 62, 62, 0.3);
 }
 
+/* --- Signup Requests Modal & Button --- */
+.signup-requests-btn {
+    background: linear-gradient(135deg, #ffb347 0%, #ff6b81 100%);
+    color: #fff;
+    font-weight: 700;
+    border: none;
+    border-radius: 16px;
+    padding: 10px 22px;
+    font-size: 1.1rem;
+    margin-left: 18px;
+    box-shadow: 0 2px 8px rgba(255,179,71,0.13);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.signup-requests-btn:hover {
+    background: linear-gradient(135deg, #ff6b81 0%, #ffb347 100%);
+    transform: scale(1.04);
+}
+
+#signupRequestsModal .modal-content {
+    padding: 0;
+    max-width: 480px;
+    border-radius: 22px;
+    overflow: hidden;
+}
+#signupRequestsModal .modal-header {
+    background: linear-gradient(135deg, #ffb347 0%, #ff6b81 100%);
+    color: #fff;
+    padding: 22px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#signupRequestsModal .modal-header h3 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+#signupRequestsModal .close-btn {
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.1s;
+}
+#signupRequestsModal .close-btn:hover {
+    background: rgba(255,255,255,0.32);
+    transform: scale(1.1);
+}
+#signupRequestsModal .modal-body {
+    padding: 28px 24px 24px 24px;
+    background: #f9fafb;
+}
+.signup-request-card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(255,179,71,0.08);
+    padding: 18px 16px 14px 16px;
+    margin-bottom: 18px;
+    font-size: 1.08rem;
+    color: #444;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.signup-request-card b {
+    color: #ff6b81;
+}
+.signup-request-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+}
+.approve-btn, .decline-btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.2s, transform 0.1s;
+}
+.approve-btn {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    color: #fff;
+}
+.approve-btn:hover {
+    background: linear-gradient(135deg, #38a169 0%, #48bb78 100%);
+    transform: scale(1.05);
+}
+.decline-btn {
+    background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+    color: #fff;
+}
+.decline-btn:hover {
+    background: linear-gradient(135deg, #c53030 0%, #e53e3e 100%);
+    transform: scale(1.05);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .login-container {
