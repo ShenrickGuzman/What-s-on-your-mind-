@@ -1,3 +1,5 @@
+// ...existing code...
+
 // Delete a user account (admin only)
 app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
     const userId = req.params.id;
