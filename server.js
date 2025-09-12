@@ -577,6 +577,7 @@ app.post('/api/auth/signup', async (req, res) => {
     if (pendingExists.rows.length > 0) return res.status(409).json({ error: 'A sign up request for this username or gmail is already pending approval.' });
 
     const hash = await bcrypt.hash(password, 10);
+    console.log(`[DEBUG] Signup password hash for ${username}:`, hash);
     await pool.query('INSERT INTO signup_requests (username, password_hash, gmail, status) VALUES ($1, $2, $3, $4)', [username, hash, gmail, 'pending']);
     res.json({ success: true, message: 'Sign up request sent, wait for the admin to approve it.' });
 });
@@ -635,6 +636,8 @@ app.post('/api/auth/signup-requests/:id/approve', requireAuth, async (req, res) 
             await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['declined', id]);
             return res.status(409).json({ error: 'User or Gmail already exists. Request declined.' });
         }
+        // Debug: print hash being inserted
+        console.log(`[DEBUG] Approving signup for ${request.username}, hash:`, request.password_hash);
         // Insert into users
         await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [request.username, request.password_hash, request.gmail]);
         // Mark request as approved
@@ -644,6 +647,22 @@ app.post('/api/auth/signup-requests/:id/approve', requireAuth, async (req, res) 
         console.error('Error approving signup request:', err.message);
         res.status(500).json({ error: 'Failed to approve signup request' });
     }
+// --- Fix: Remove users with broken hashes (not bcrypt hashes) so they can re-sign up ---
+async function cleanBrokenUserHashes() {
+    try {
+        const { rows } = await pool.query('SELECT id, username, password_hash FROM users');
+        for (const user of rows) {
+            // bcrypt hashes start with $2
+            if (!user.password_hash.startsWith('$2')) {
+                console.log(`[CLEANUP] Removing user with broken hash: ${user.username}`);
+                await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
+            }
+        }
+    } catch (err) {
+        console.error('Error cleaning up broken user hashes:', err.message);
+    }
+}
+cleanBrokenUserHashes();
 });
 
 // Decline signup request (admin only)
