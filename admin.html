@@ -104,28 +104,29 @@
                     </div>
                     <button id="viewSignupRequestsBtn" class="signup-requests-btn">
                         <i class="fas fa-user-clock"></i>
-                        Click to view sign up request
+                        <span id="signupRequestsBtnText">Click to view sign up request</span>
                     </button>
                     <button id="logoutBtn" class="logout-btn">
                         <i class="fas fa-sign-out-alt"></i>
                         Logout
-    <!-- Signup Requests Modal -->
-    <div id="signupRequestsModal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>📝 Sign Up Requests</h3>
-                <button id="closeSignupRequestsModal" class="close-btn">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div id="signupRequestsList">
-                    <!-- Requests will be populated here -->
-                </div>
+                    </button>
+</div>
+<!-- Signup Requests Modal (move outside dashboard/header for proper overlay) -->
+<div id="signupRequestsModal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📝 Sign Up Requests</h3>
+            <button id="closeSignupRequestsModal" class="close-btn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="signupRequestsList">
+                <!-- Requests will be populated here -->
             </div>
         </div>
     </div>
-                    </button>
+</div>
                 </div>
             </div>
         </header>
