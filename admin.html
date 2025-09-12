@@ -102,9 +102,29 @@
                         <span id="currentUser" class="current-user">👤 Admin</span>
                         <span id="userRole" class="user-role">👑 Owner</span>
                     </div>
+                    <button id="viewSignupRequestsBtn" class="signup-requests-btn">
+                        <i class="fas fa-user-clock"></i>
+                        Click to view sign up request
+                    </button>
                     <button id="logoutBtn" class="logout-btn">
                         <i class="fas fa-sign-out-alt"></i>
                         Logout
+    <!-- Signup Requests Modal -->
+    <div id="signupRequestsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📝 Sign Up Requests</h3>
+                <button id="closeSignupRequestsModal" class="close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="signupRequestsList">
+                    <!-- Requests will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
                     </button>
                 </div>
             </div>
