@@ -84,16 +84,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeSignupRequestsModal = document.getElementById('closeSignupRequestsModal');
     const signupRequestsList = document.getElementById('signupRequestsList');
 
-    viewSignupRequestsBtn.addEventListener('click', async () => {
-        await loadSignupRequests();
-        signupRequestsModal.classList.remove('hidden');
-    });
-    closeSignupRequestsModal.addEventListener('click', () => {
-        signupRequestsModal.classList.add('hidden');
-    });
+    // Toggle state
+    let signupRequestsVisible = false;
+
+    function toggleSignupRequests() {
+        signupRequestsVisible = !signupRequestsVisible;
+        if (signupRequestsVisible) {
+            loadSignupRequests();
+            signupRequestsModal.classList.remove('hidden');
+            viewSignupRequestsBtn.textContent = '✖ Close sign up requests';
+        } else {
+            signupRequestsModal.classList.add('hidden');
+            viewSignupRequestsBtn.textContent = '📋 Click to view sign up request';
+        }
+    }
+
+    viewSignupRequestsBtn.addEventListener('click', toggleSignupRequests);
+    closeSignupRequestsModal.addEventListener('click', toggleSignupRequests);
     signupRequestsModal.addEventListener('click', (e) => {
         if (e.target === signupRequestsModal) {
-            signupRequestsModal.classList.add('hidden');
+            toggleSignupRequests();
         }
     });
 
