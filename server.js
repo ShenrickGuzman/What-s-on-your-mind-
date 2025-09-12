@@ -567,9 +567,12 @@ app.post('/api/auth/signup', async (req, res) => {
     const { username, password, gmail } = req.body;
     if (!username || !password || !gmail) return res.status(400).json({ error: 'All fields required' });
 
-    // Check if username or gmail already exists in users or signup_requests (pending)
+    // Check if username or gmail already exists in users
     const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [username, gmail]);
     if (userExists.rows.length > 0) return res.status(409).json({ error: 'User or Gmail already exists' });
+    // Remove declined requests for this username or gmail
+    await pool.query('DELETE FROM signup_requests WHERE (username = $1 OR gmail = $2) AND status = $3', [username, gmail, 'declined']);
+    // Check if a pending request exists
     const pendingExists = await pool.query('SELECT id FROM signup_requests WHERE (username = $1 OR gmail = $2) AND status = $3', [username, gmail, 'pending']);
     if (pendingExists.rows.length > 0) return res.status(409).json({ error: 'A sign up request for this username or gmail is already pending approval.' });
 
