@@ -654,6 +654,16 @@ app.get('/index.html', (req, res, next) => {
 });
 
 // View all pending signup requests (admin only)
+// List all users and their Gmail (admin only)
+app.get('/api/admin/all-users', requireAuth, async (req, res) => {
+    try {
+        const { rows } = await pool.query('SELECT username, gmail FROM users ORDER BY id ASC');
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching all users:', err.message);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
 app.get('/api/auth/signup-requests', requireAuth, async (req, res) => {
     try {
         const { rows } = await pool.query('SELECT * FROM signup_requests WHERE status = $1 ORDER BY created_at ASC', ['pending']);
