@@ -78,6 +78,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // --- Signup Requests Modal Logic ---
+    const viewSignupRequestsBtn = document.getElementById('viewSignupRequestsBtn');
+    const signupRequestsModal = document.getElementById('signupRequestsModal');
+    const closeSignupRequestsModal = document.getElementById('closeSignupRequestsModal');
+    const signupRequestsList = document.getElementById('signupRequestsList');
+
+    viewSignupRequestsBtn.addEventListener('click', async () => {
+        await loadSignupRequests();
+        signupRequestsModal.classList.remove('hidden');
+    });
+    closeSignupRequestsModal.addEventListener('click', () => {
+        signupRequestsModal.classList.add('hidden');
+    });
+    signupRequestsModal.addEventListener('click', (e) => {
+        if (e.target === signupRequestsModal) {
+            signupRequestsModal.classList.add('hidden');
+        }
+    });
+
+    async function loadSignupRequests() {
+        signupRequestsList.innerHTML = '<div style="text-align:center;">Loading...</div>';
+        try {
+            const res = await fetch(`${API_BASE}/auth/signup-requests`, { credentials: 'include' });
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+                signupRequestsList.innerHTML = data.map(req => `
+                    <div class="signup-request-card">
+                        <div><b>Username:</b> ${req.username}</div>
+                        <div><b>Gmail:</b> ${req.gmail}</div>
+                        <div><b>Status:</b> ${req.status}</div>
+                        <div class="signup-request-actions">
+                            <button onclick="window.approveSignupRequest(${req.id})" class="approve-btn">Approve</button>
+                            <button onclick="window.declineSignupRequest(${req.id})" class="decline-btn">Decline</button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                signupRequestsList.innerHTML = '<div style="text-align:center;">No pending requests.</div>';
+            }
+        } catch (err) {
+            signupRequestsList.innerHTML = '<div style="color:red;">Failed to load requests.</div>';
+        }
+    }
+
+    window.approveSignupRequest = async function(id) {
+        if (!confirm('Approve this sign up request?')) return;
+        await fetch(`${API_BASE}/auth/signup-requests/${id}/approve`, { method: 'POST', credentials: 'include' });
+        await loadSignupRequests();
+        showToast('success', 'Request approved!');
+    };
+    window.declineSignupRequest = async function(id) {
+        if (!confirm('Decline this sign up request?')) return;
+        await fetch(`${API_BASE}/auth/signup-requests/${id}/decline`, { method: 'POST', credentials: 'include' });
+        await loadSignupRequests();
+        showToast('success', 'Request declined.');
+    };
+
     // Auth toggle functions
     function showSignupForm() {
         loginForm.classList.add('hidden');
