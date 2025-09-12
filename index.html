@@ -120,8 +120,9 @@
 
 	<div class="container">
 		<header class="header">
-			<div class="title">
+			<div class="title" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
 				<div class="welcome-title">Welcome Margarets <span class="waving-heart">👋</span></div>
+				<button id="logoutBtn" class="logout-btn" style="display:none;padding:8px 18px;background:#ff6b6b;color:#fff;border:none;border-radius:18px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.07);cursor:pointer;transition:background 0.2s;">Log Out</button>
 			</div>
 
 			<div class="welcome-bubble">
@@ -275,12 +276,30 @@
 	</div>
 
 	<script src="script.js"></script>
-	<script>
-fetch('/api/auth/status')
-  .then(res => res.json())
-  .then(data => {
-    if (!data.authenticated) window.location.href = 'auth.html';
-  });
-</script>
+		<script>
+		// Show logout button if authenticated, otherwise redirect
+		fetch('/api/auth/status')
+			.then(res => res.json())
+			.then(data => {
+				const logoutBtn = document.getElementById('logoutBtn');
+				if (data.authenticated) {
+					if (logoutBtn) logoutBtn.style.display = 'inline-block';
+				} else {
+					window.location.href = 'auth.html';
+				}
+			});
+		// Logout logic
+		document.addEventListener('DOMContentLoaded', function() {
+			const logoutBtn = document.getElementById('logoutBtn');
+			if (logoutBtn) {
+				logoutBtn.addEventListener('click', function() {
+					fetch('/api/auth/logout', { method: 'POST' })
+						.then(() => {
+							window.location.href = 'auth.html';
+						});
+				});
+			}
+		});
+		</script>
 </body>
 </html>
