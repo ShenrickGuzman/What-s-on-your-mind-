@@ -6,11 +6,11 @@ const { Pool } = require('pg');
 
 // Use your actual connection string here
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'YOUR_POSTGRES_CONNECTION_STRING'
+  connectionString: 'postgresql://whats_on_your_mind_user:egXUpK8PVdAQFGr6cs6M0DKbsIE2Gevo@dpg-d2tb5f15pdvs739cvcf0-a/whats_on_your_mind'
 });
 
 const gmails = [
-  'your_verified_email@gmail.com',
+  'guzmanshenrick@gmail.com',
   // Add more gmails here
 ];
 
