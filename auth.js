@@ -66,10 +66,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (data.success) {
-                signupSuccess.textContent = 'Account created! You can now sign in.';
+                signupSuccess.textContent = data.message || 'Sign up request sent, wait for the admin to approve it.';
+                signupForm.reset();
                 setTimeout(() => {
                     tabSignin.click();
-                }, 1200);
+                }, 2000);
             } else {
                 signupError.textContent = data.error || 'Sign up failed';
             }
