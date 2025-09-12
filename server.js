@@ -1,6 +1,6 @@
 const express = require('express');
 const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
+
 const session = require('express-session');
 const cors = require('cors');
 const bodyParser = require('body-parser');
