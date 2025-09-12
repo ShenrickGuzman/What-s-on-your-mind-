@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const signupRequestsModal = document.getElementById('signupRequestsModal');
     const closeSignupRequestsModal = document.getElementById('closeSignupRequestsModal');
     const signupRequestsList = document.getElementById('signupRequestsList');
+    const signupRequestsBtnText = document.getElementById('signupRequestsBtnText');
 
     // Toggle state
     let signupRequestsVisible = false;
@@ -92,10 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (signupRequestsVisible) {
             loadSignupRequests();
             signupRequestsModal.classList.remove('hidden');
-            viewSignupRequestsBtn.textContent = '✖ Close sign up requests';
+            signupRequestsBtnText.textContent = '✖ Close sign up requests';
         } else {
             signupRequestsModal.classList.add('hidden');
-            viewSignupRequestsBtn.textContent = '📋 Click to view sign up request';
+            signupRequestsBtnText.textContent = 'Click to view sign up request';
         }
     }
 
