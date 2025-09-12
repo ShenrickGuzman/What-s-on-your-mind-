@@ -1,4 +1,42 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // All users section elements
+    const allUsersSection = document.getElementById('allUsersSection');
+    const allUsersList = document.getElementById('allUsersList');
+    const refreshAllUsersBtn = document.getElementById('refreshAllUsersBtn');
+
+    // Load all users on dashboard show
+    function showDashboard() {
+        loginScreen.classList.add('hidden');
+        dashboard.classList.remove('hidden');
+        loadAllUsers();
+    }
+
+    // Fetch and display all users and their Gmail addresses
+    async function loadAllUsers() {
+        allUsersList.innerHTML = '<div style="text-align:center;">Loading...</div>';
+        try {
+            const res = await fetch(`${API_BASE}/admin/all-users`, { credentials: 'include' });
+            if (!res.ok) throw new Error('Failed to fetch users');
+            const users = await res.json();
+            if (Array.isArray(users) && users.length > 0) {
+                allUsersList.innerHTML = users.map(user => `
+                    <div class="all-user-card">
+                        <div><b>Username:</b> ${user.username}</div>
+                        <div><b>Gmail:</b> ${user.gmail}</div>
+                    </div>
+                `).join('');
+            } else {
+                allUsersList.innerHTML = '<div style="text-align:center;">No users found.</div>';
+            }
+        } catch (err) {
+            allUsersList.innerHTML = '<div style="color:red;">Failed to load users.</div>';
+        }
+    }
+
+    // Refresh button for all users
+    if (refreshAllUsersBtn) {
+        refreshAllUsersBtn.addEventListener('click', loadAllUsers);
+    }
     // Use the current domain for API calls
     const API_BASE = window.location.origin + '/api';
     
