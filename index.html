@@ -10,7 +10,7 @@
 </head>
 <body>
 	<!-- Logout button top left -->
-	<button id="logoutBtn" class="logout-btn" style="position:fixed;top:24px;left:24px;z-index:1001;padding:10px 28px;background:#ff6b6b;color:#fff;font-size:1.1rem;border:none;border-radius:22px;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,0.10);cursor:pointer;transition:background 0.2s;display:none;letter-spacing:1px;text-align:center;">Log Out</button>
+	<button id="logoutBtn" class="logout-btn" style="position:fixed;top:20px;left:20px;z-index:1001;padding:6px 16px;background:#ff6b6b;color:#fff;font-size:0.98rem;border:none;border-radius:16px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.10);cursor:pointer;transition:background 0.2s;display:none;letter-spacing:0.5px;text-align:center;">Log Out</button>
 	<!-- Theme toggle -->
 	<button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
 		<i class="fas fa-moon icon" id="themeIcon"></i>
@@ -123,7 +123,7 @@
 	<div class="container">
 		<header class="header">
 			<div class="title" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; width: 100%;">
-				<div class="welcome-title" style="font-size:2.1rem;font-weight:900;text-align:center;">Welcome Margarets <span class="waving-heart">👋</span></div>
+				<div class="welcome-title" style="font-size:2.7rem;font-weight:900;text-align:center;letter-spacing:1.5px;text-shadow:2px 2px 0 #ffe082,4px 4px 0 #ffb300;">Welcome Margarets <span class="waving-heart">👋</span></div>
 			</div>
 
 			<div class="welcome-bubble">
@@ -289,7 +289,7 @@
 					window.location.href = 'auth.html';
 				}
 			});
-		// Logout logic
+		// Logout logic and night mode for logout button
 		document.addEventListener('DOMContentLoaded', function() {
 			const logoutBtn = document.getElementById('logoutBtn');
 			if (logoutBtn) {
@@ -299,6 +299,26 @@
 							window.location.href = 'auth.html';
 						});
 				});
+				// Night mode toggle for logout button
+				function updateLogoutBtnTheme() {
+					if (document.body.classList.contains('dark-mode')) {
+						logoutBtn.style.background = '#222';
+						logoutBtn.style.color = '#ffe082';
+						logoutBtn.style.boxShadow = '0 2px 8px rgba(255,224,130,0.13)';
+					} else {
+						logoutBtn.style.background = '#ff6b6b';
+						logoutBtn.style.color = '#fff';
+						logoutBtn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.10)';
+					}
+				}
+				updateLogoutBtnTheme();
+				// Listen for theme changes
+				const themeToggle = document.getElementById('themeToggle');
+				if (themeToggle) {
+					themeToggle.addEventListener('click', function() {
+						setTimeout(updateLogoutBtnTheme, 100);
+					});
+				}
 			}
 		});
 		</script>
