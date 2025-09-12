@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="all-user-card">
                         <div><b>Username:</b> ${user.username}</div>
                         <div><b>Gmail:</b> ${user.gmail}</div>
+                        <div>
+                            <button class="delete-user-btn" onclick="window.deleteUserAccount(${user.id}, '${user.username}')" ${currentUserInfo && user.username === currentUserInfo.username ? 'disabled' : ''}>
+                                <i class='fas fa-trash'></i> Delete
+                            </button>
+                        </div>
                     </div>
                 `).join('');
             } else {
@@ -30,6 +35,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             allUsersList.innerHTML = '<div style="color:red;">Failed to load users.</div>';
+        }
+    }
+
+    // Delete user account (global for onclick)
+    window.deleteUserAccount = async function(userId, username) {
+        if (!confirm(`Are you sure you want to delete user '${username}'? This action cannot be undone.`)) return;
+        try {
+            const delRes = await fetch(`${API_BASE}/admin/delete-user/${userId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            const result = await delRes.json();
+            if (result.success) {
+                showToast('success', `User '${username}' deleted successfully! 🗑️`);
+                loadAllUsers();
+            } else {
+                showToast('error', result.error || 'Failed to delete user');
+            }
+        } catch (err) {
+            showToast('error', 'Failed to delete user');
         }
     }
 
