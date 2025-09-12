@@ -2,16 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome Margarets - Sign In / Sign Up</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@700&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
-        body {
-            background: linear-gradient(120deg, #fbc2eb 0%, #a6c1ee 100%);
-            min-height: 100vh;
+        html, body {
+            height: 100%;
             margin: 0;
-            overflow: hidden;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            min-height: 100vh;
+            min-width: 100vw;
+            background: linear-gradient(120deg, #fbc2eb 0%, #a6c1ee 100%);
             font-family: 'Comic Neue', 'Fredoka One', cursive, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
         }
         .bubbles {
             position: fixed;
@@ -33,16 +43,34 @@
         .auth-container {
             position: relative;
             z-index: 1;
-            background: rgba(255,255,255,0.95);
+            background: rgba(255,255,255,0.97);
             border-radius: 36px;
             box-shadow: 0 8px 32px rgba(124,77,255,0.13);
             padding: 44px 36px 32px 36px;
             max-width: 410px;
-            width: 100%;
+            width: 95vw;
+            min-width: 270px;
             text-align: center;
-            margin: 60px auto 0 auto;
+            margin: 40px auto 40px auto;
             border: 4px dashed #ffb300;
             animation: popin 1.2s cubic-bezier(.68,-0.55,.27,1.55);
+        }
+        @media (max-width: 600px) {
+            .auth-container {
+                padding: 24px 8vw 18px 8vw;
+                max-width: 98vw;
+                border-radius: 18px;
+            }
+            .auth-tabs {
+                flex-direction: column;
+                gap: 6px;
+            }
+        }
+        @media (max-width: 400px) {
+            .auth-container {
+                padding: 10px 2vw 10px 2vw;
+                border-radius: 10px;
+            }
         }
         @keyframes popin {
             0% { transform: scale(0.7) rotate(-8deg); opacity: 0; }
@@ -51,7 +79,7 @@
         }
         .auth-container h1 {
             font-family: 'Fredoka One', 'Comic Neue', cursive, sans-serif;
-            font-size: 2.5rem;
+            font-size: 2.2rem;
             margin-bottom: 6px;
             color: #7c4dff;
             letter-spacing: 1px;
@@ -59,7 +87,7 @@
             text-shadow: 2px 2px 0 #ffe082, 4px 4px 0 #ffb300;
         }
         .auth-container .subtitle {
-            font-size: 1.15rem;
+            font-size: 1.1rem;
             color: #ff6b6b;
             margin-bottom: 18px;
             font-weight: 700;
