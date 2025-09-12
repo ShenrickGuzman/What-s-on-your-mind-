@@ -131,6 +131,7 @@
             </div>
         </header>
 
+
         <!-- Admin Management Section (Owner Only) -->
         <div id="adminManagementSection" class="admin-management-section hidden">
             <div class="section-header">
@@ -140,11 +141,23 @@
                     Add New Admin
                 </button>
             </div>
-            
             <div class="admin-users-list">
                 <div id="adminUsersList" class="admin-users-grid">
                     <!-- Admin users will be populated here -->
                 </div>
+            </div>
+        </div>
+
+        <!-- All Users List Section -->
+        <div id="allUsersSection" class="all-users-section">
+            <div class="section-header">
+                <h2>📋 All Users & Gmail Addresses</h2>
+                <button id="refreshAllUsersBtn" class="refresh-btn">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            <div id="allUsersList" class="all-users-list">
+                <!-- All users will be populated here -->
             </div>
         </div>
 
