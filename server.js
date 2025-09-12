@@ -130,6 +130,16 @@ async function createTables() {
     `);
     console.log('Verified gmails table ready');
 
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            token TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL
+        )
+    `);
+    console.log('Password reset tokens table ready');
+
     await createDefaultAdmin();
 }
 
@@ -540,6 +550,7 @@ app.get('/admin', (req, res) => {
 const bcrypt = require('bcryptjs');
 
 // --- User Auth System ---
+const crypto = require('crypto');
 
 // Ensure users, signup_requests, and verified_gmails tables exist
 pool.query(`
@@ -563,6 +574,38 @@ CREATE TABLE IF NOT EXISTS verified_gmails (
 `).catch(console.error);
 
 // Signup endpoint (approval system)
+// Forgot password: request reset
+app.post('/api/auth/forgot-password', async (req, res) => {
+    const { gmail } = req.body;
+    if (!gmail) return res.status(400).json({ error: 'Gmail is required' });
+    const { rows } = await pool.query('SELECT id FROM users WHERE gmail = $1', [gmail]);
+    if (rows.length === 0) return res.status(404).json({ error: 'No user found with that Gmail' });
+    const userId = rows[0].id;
+    // Generate token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 min expiry
+    await pool.query('INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)', [userId, token, expiresAt]);
+    // Log reset link (simulate email)
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5500'}/auth.html?resetToken=${token}`;
+    console.log(`[RESET] Password reset link for user ${gmail}: ${resetLink}`);
+    res.json({ success: true, message: 'If your Gmail is registered, a reset link has been sent.' });
+});
+
+// Reset password with token
+app.post('/api/auth/reset-password', async (req, res) => {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token and new password required' });
+    // Find token
+    const { rows } = await pool.query('SELECT * FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW()', [token]);
+    if (rows.length === 0) return res.status(400).json({ error: 'Invalid or expired token' });
+    const reset = rows[0];
+    // Update user password
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, reset.user_id]);
+    // Delete all tokens for this user
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [reset.user_id]);
+    res.json({ success: true, message: 'Password has been reset. You can now log in.' });
+});
 app.post('/api/auth/signup', async (req, res) => {
     const { username, password, gmail } = req.body;
     if (!username || !password || !gmail) return res.status(400).json({ error: 'All fields required' });
