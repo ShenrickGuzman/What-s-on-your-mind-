@@ -110,6 +110,23 @@ async function createTables() {
     `);
     console.log('Public messages table ready');
 
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            gmail TEXT UNIQUE NOT NULL
+        )
+    `);
+    console.log('Users table ready');
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS verified_gmails (
+            gmail TEXT PRIMARY KEY
+        )
+    `);
+    console.log('Verified gmails table ready');
+
     await createDefaultAdmin();
 }
 
@@ -522,6 +539,72 @@ app.delete('/api/admin/users/:id', requireAuth, (req, res) => {
 // Serve admin page
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Authentication routes
+
+const bcrypt = require('bcryptjs');
+
+// --- User Auth System ---
+
+// Ensure users and verified_gmails tables exist
+pool.query(`
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  gmail TEXT UNIQUE NOT NULL
+);
+CREATE TABLE IF NOT EXISTS verified_gmails (
+  gmail TEXT PRIMARY KEY
+);
+`).catch(console.error);
+
+// Signup endpoint
+app.post('/api/auth/signup', async (req, res) => {
+    const { username, password, gmail } = req.body;
+    if (!username || !password || !gmail) return res.status(400).json({ error: 'All fields required' });
+
+    // Check if gmail is verified
+    const { rows } = await pool.query('SELECT gmail FROM verified_gmails WHERE gmail = $1', [gmail]);
+    if (rows.length === 0) return res.status(403).json({ error: 'Gmail not verified' });
+
+    // Check if user exists
+    const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [username, gmail]);
+    if (userExists.rows.length > 0) return res.status(409).json({ error: 'User or Gmail already exists' });
+
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [username, hash, gmail]);
+    req.session.user = { username, gmail };
+    res.json({ success: true });
+});
+
+// Signin endpoint
+app.post('/api/auth/signin', async (req, res) => {
+    const { username, password } = req.body;
+    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    const user = rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    req.session.user = { username: user.username, gmail: user.gmail };
+    res.json({ success: true });
+});
+
+// Auth status
+app.get('/api/auth/status', (req, res) => {
+    res.json({ authenticated: !!req.session.user });
+});
+
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy(() => res.json({ success: true }));
+});
+
+// Protect index.html
+app.get('/index.html', (req, res, next) => {
+    if (!req.session.user) return res.redirect('/auth.html');
+    next();
 });
 
 // Start server
