@@ -606,6 +606,17 @@ app.get('/index.html', (req, res, next) => {
     next();
 });
 
+// View all pending signup requests (admin only)
+app.get('/api/auth/signup-requests', requireAuth, async (req, res) => {
+    try {
+        const { rows } = await pool.query('SELECT * FROM signup_requests WHERE status = $1 ORDER BY created_at ASC', ['pending']);
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching signup requests:', err.message);
+        res.status(500).json({ error: 'Failed to fetch signup requests' });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
