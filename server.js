@@ -296,6 +296,7 @@ app.get('/api/public-messages', async (req, res) => {
         `, [ids]);
         // User reactions (if logged in)
         let userReactionRows = [];
+        const isShen = req.session.user && req.session.user.username && req.session.user.username.toLowerCase() === 'shen';
         if (req.session.user && req.session.user.username) {
             const { rows } = await pool.query(`
                 SELECT public_message_id, reaction_type
@@ -303,6 +304,16 @@ app.get('/api/public-messages', async (req, res) => {
                 WHERE public_message_id = ANY($1) AND username = $2
             `, [ids, req.session.user.username]);
             userReactionRows = rows;
+        }
+        // Reveal poster info for SHEN if available (simulate: add a field to each message)
+        let posterMap = {};
+        if (isShen) {
+            // If you want to store poster info, you need to add a column to public_messages. For now, simulate with name/gmail if present.
+            // If name is 'Anonymous', try to find in users table by matching message/gmail if you store it.
+            // Here, just expose the name/gmail if present.
+            messages.forEach(m => {
+                posterMap[m.id] = { name: m.name, /* add more if you store more */ };
+            });
         }
         const reactionMap = {};
         reactionRows.forEach(r => {
@@ -316,16 +327,37 @@ app.get('/api/public-messages', async (req, res) => {
             if (!userReactionMap[ur.public_message_id]) userReactionMap[ur.public_message_id] = [];
             userReactionMap[ur.public_message_id].push(ur.reaction_type);
         });
-        const enriched = messages.map(m => ({
-            ...m,
-            reactionCounts: reactionMap[m.id] || {},
-            commentCount: commentCountMap[m.id] || 0,
-            userReactions: userReactionMap[m.id] || []
-        }));
+        const enriched = messages.map(m => {
+            const base = {
+                ...m,
+                reactionCounts: reactionMap[m.id] || {},
+                commentCount: commentCountMap[m.id] || 0,
+                userReactions: userReactionMap[m.id] || []
+            };
+            if (isShen) {
+                base._posterInfo = posterMap[m.id];
+            }
+            return base;
+        });
         res.json(enriched);
     } catch (err) {
         console.error('Error fetching public messages:', err.message);
         res.status(500).json({ error: 'Failed to fetch public messages' });
+    }
+});
+// Allow SHEN to delete any public message
+app.delete('/api/public-messages/:id', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    const isShen = req.session.user && req.session.user.username && req.session.user.username.toLowerCase() === 'shen';
+    if (!isShen) return res.status(403).json({ error: 'Only SHEN can delete public messages via this endpoint.' });
+    try {
+        const { rowCount } = await pool.query('DELETE FROM public_messages WHERE id = $1', [id]);
+        if (rowCount === 0) return res.status(404).json({ error: 'Message not found' });
+        res.json({ success: true, message: 'Message deleted successfully', deletedId: id });
+    } catch (err) {
+        console.error('Error deleting public message:', err.message);
+        res.status(500).json({ error: 'Failed to delete public message' });
     }
 });
 
