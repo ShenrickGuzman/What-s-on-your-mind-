@@ -1,3 +1,6 @@
+    // Add columns if missing (for migration)
+    try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_username TEXT'); } catch (e) {}
+    try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_gmail TEXT'); } catch (e) {}
 // (delete-user route moved below after all middleware & helpers are defined)
 
 const express = require('express');
@@ -229,13 +232,17 @@ app.get('/api/test', (req, res) => {
 // Store a new message
 app.post('/api/messages', (req, res) => {
     const { message, name, mood } = req.body;
-    
     if (!message || !mood) {
         return res.status(400).json({ error: 'Message and mood are required' });
     }
-    
-    const sql = 'INSERT INTO messages (message, name, mood) VALUES ($1, $2, $3) RETURNING id';
-    pool.query(sql, [message, name || 'Anonymous', mood])
+    // Store real account info if logged in
+    let real_username = null, real_gmail = null;
+    if (req.session.user && req.session.user.username) {
+        real_username = req.session.user.username;
+        real_gmail = req.session.user.gmail || null;
+    }
+    const sql = 'INSERT INTO messages (message, name, mood, real_username, real_gmail) VALUES ($1, $2, $3, $4, $5) RETURNING id';
+    pool.query(sql, [message, name || 'Anonymous', mood, real_username, real_gmail])
         .then((result) => {
             res.json({ success: true, messageId: result.rows[0].id, message: 'Message stored successfully' });
         })
@@ -284,7 +291,11 @@ app.get('/api/messages', requireAuth, (req, res) => {
                 // Always include _posterInfo, even if empty
                 enriched = await Promise.all(rows.map(async m => {
                     let posterInfo = {};
-                    if (m.name && m.name !== 'Anonymous') {
+                    // Prefer real_username/real_gmail if present
+                    if (m.real_username || m.real_gmail) {
+                        posterInfo = { name: m.real_username || '', gmail: m.real_gmail || '' };
+                    } else if (m.name && m.name !== 'Anonymous') {
+                        // Fallback: try to look up by name
                         const { rows: users } = await pool.query('SELECT username, gmail FROM users WHERE username = $1', [m.name]);
                         if (users.length > 0) {
                             posterInfo = { name: users[0].username, gmail: users[0].gmail };
