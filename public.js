@@ -157,7 +157,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     revealBtn.addEventListener('click', () => {
                         revealed = !revealed;
                         if (revealed) {
-                            infoDiv.textContent = `Name: ${msg._posterInfo.name || 'N/A'}`;
+                            // Show the real account (gmail if available, else name)
+                            let info = '';
+                            if (msg._posterInfo.gmail) {
+                                info = `Gmail: ${msg._posterInfo.gmail}`;
+                            } else if (msg._posterInfo.name) {
+                                info = `Name: ${msg._posterInfo.name}`;
+                            } else {
+                                info = 'Unknown';
+                            }
+                            infoDiv.textContent = info;
                             revealBtn.textContent = '🙈 Hide Poster';
                         } else {
                             infoDiv.textContent = '';
