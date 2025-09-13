@@ -1,4 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Loading Spinner ---
+    window.showLoading = function(show) {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) {
+            spinner.classList.toggle('hidden', !show);
+        }
+    };
     // --- Toast Notification ---
     window.showToast = function(type, message) {
         let toast = document.getElementById('toastNotification');
