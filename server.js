@@ -406,41 +406,39 @@ app.post('/api/public-messages/:id/react', async (req, res) => {
     const { type } = req.body;
     if (!ALLOWED_REACTIONS.includes(type)) return res.status(400).json({ error: 'Invalid reaction type' });
     const username = req.session.user && req.session.user.username ? req.session.user.username : null;
+    // For anonymous, use session to limit per session per reaction
+    if (!req.session.reacted) req.session.reacted = {};
+    if (!req.session.reacted[id]) req.session.reacted[id] = {};
     if (username) {
-        // Toggle behavior for logged-in user
+        // Toggle behavior for logged-in user (enforced by unique index)
         try {
-            // Attempt insert
-            await pool.query(`
-                INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
-                VALUES ($1, $2, false, $3)
-                ON CONFLICT (public_message_id, username, reaction_type) DO NOTHING
-            `, [id, username, type]);
-            // Check if exists to decide toggle off
-            const { rows } = await pool.query(`
-                SELECT id FROM public_message_reactions WHERE public_message_id = $1 AND username = $2 AND reaction_type = $3
-            `, [id, username, type]);
-            if (rows.length > 1) {
-                // Shouldn't happen, cleanup
-                await pool.query('DELETE FROM public_message_reactions WHERE id <> $1 AND public_message_id = $2 AND username = $3 AND reaction_type = $4', [rows[0].id, id, username, type]);
-            } else if (rows.length === 1) {
-                // Already exists -> toggle off request? Determine if user intended toggle off.
-                // We'll use a query parameter 'toggle' = true? Simpler: if client wants to remove, send {remove:true}
-            }
             // If client requested remove explicitly
             if (req.body.remove) {
                 await pool.query('DELETE FROM public_message_reactions WHERE public_message_id = $1 AND username = $2 AND reaction_type = $3', [id, username, type]);
+            } else {
+                // Insert if not exists
+                await pool.query(`
+                    INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
+                    VALUES ($1, $2, false, $3)
+                    ON CONFLICT (public_message_id, username, reaction_type) DO NOTHING
+                `, [id, username, type]);
             }
         } catch (err) {
             console.error('Reaction toggle error (logged-in):', err.message);
             return res.status(500).json({ error: 'Failed to react' });
         }
     } else {
-        // Anonymous reaction (always additive)
+        // Anonymous: allow only one reaction per type per message per session
         try {
+            if (req.session.reacted[id][type]) {
+                // Already reacted in this session
+                return res.status(429).json({ error: 'You have already reacted to this message with this reaction.' });
+            }
             await pool.query(`
                 INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
                 VALUES ($1, NULL, true, $2)
             `, [id, type]);
+            req.session.reacted[id][type] = true;
         } catch (err) {
             console.error('Reaction add error (anonymous):', err.message);
             return res.status(500).json({ error: 'Failed to react' });
@@ -460,6 +458,9 @@ app.post('/api/public-messages/:id/react', async (req, res) => {
         if (username) {
             const { rows } = await pool.query('SELECT reaction_type FROM public_message_reactions WHERE public_message_id = $1 AND username = $2', [id, username]);
             userReactions = rows.map(r => r.reaction_type);
+        } else {
+            // For anonymous, reflect session state
+            userReactions = Object.keys(req.session.reacted[id]);
         }
         res.json({ success: true, reactionCounts, userReactions });
     } catch (err) {
