@@ -320,7 +320,7 @@ app.get('/api/public-messages', async (req, res) => {
         let posterMap = {};
         if (isShen) {
             for (const m of messages) {
-                // Always show real_username and real_gmail if present, else provide empty object
+                // For SHEN, always show real_username and real_gmail if present, even if not the current user
                 let posterInfo = {};
                 if (m.real_gmail) posterInfo.gmail = m.real_gmail;
                 if (m.real_username) posterInfo.name = m.real_username;
@@ -348,7 +348,7 @@ app.get('/api/public-messages', async (req, res) => {
                 userReactions: userReactionMap[m.id] || []
             };
             if (isShen) {
-                // Always include _posterInfo, even if empty
+                // For SHEN, always include _posterInfo with real account info if available
                 base._posterInfo = posterMap[m.id] || {};
             }
             return base;
