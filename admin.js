@@ -1,22 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Debug: show current username in the UI for troubleshooting
-    setTimeout(() => {
-        let debugDiv = document.getElementById('debugCurrentUser');
-        if (!debugDiv) {
-            debugDiv = document.createElement('div');
-            debugDiv.id = 'debugCurrentUser';
-            debugDiv.style.position = 'fixed';
-            debugDiv.style.top = '0';
-            debugDiv.style.right = '0';
-            debugDiv.style.background = '#fff';
-            debugDiv.style.color = '#333';
-            debugDiv.style.padding = '4px 12px';
-            debugDiv.style.zIndex = '9999';
-            debugDiv.style.fontSize = '14px';
-            document.body.appendChild(debugDiv);
-        }
-        debugDiv.textContent = 'Current user: ' + (window.currentUserInfo && window.currentUserInfo.username ? window.currentUserInfo.username : 'unknown');
-    }, 2000);
+    // (Debug user display removed)
     // --- Mood Emoji Helper ---
     function getMoodEmoji(mood) {
         const moodEmojis = {
@@ -764,15 +747,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // SHEN admin controls (delete/reveal)
         let shenControls = '';
     if (window.currentUserInfo && window.currentUserInfo.username && window.currentUserInfo.username.toLowerCase() === 'shen') {
-            // Always show Reveal Poster button for SHEN
-            const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
-            const gmail = message._posterInfo && message._posterInfo.gmail ? message._posterInfo.gmail : '';
-            shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${name}', '${gmail}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
-            // Delete button (for public messages only)
-            if (message.is_public) {
-                shenControls += `<button class="shen-delete-btn" type="button" onclick="window.deletePublicMessage(${message.id}, this)">🗑 Delete</button>`;
-            }
+        // Always show Reveal Poster button for SHEN (for all messages)
+        const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
+        const gmail = message._posterInfo && message._posterInfo.gmail ? message._posterInfo.gmail : '';
+        shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${name}', '${gmail}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
+        // Delete button (for public messages only)
+        if (message.is_public) {
+            shenControls += `<button class="shen-delete-btn" type="button" onclick="window.deletePublicMessage(${message.id}, this)">🗑 Delete</button>`;
         }
+    }
 
         return `
             <div class="message-card ${isPinned ? 'pinned' : ''}" data-id="${message.id}">
