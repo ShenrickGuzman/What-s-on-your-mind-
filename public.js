@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allMessages = [];
     let sortOrder = 'newest';
+    let isShen = false;
 
     function showLoading(show) {
         loadingSpinner.classList.toggle('hidden', !show);
@@ -139,6 +140,55 @@ document.addEventListener('DOMContentLoaded', () => {
             text.textContent = msg.message;
             const reactionsBar = buildReactionBar(msg);
 
+            // SHEN-only controls
+            let shenControls = null;
+            if (isShen) {
+                shenControls = document.createElement('div');
+                shenControls.className = 'shen-controls';
+                // Reveal poster info
+                if (msg._posterInfo && (msg._posterInfo.name || msg._posterInfo.gmail)) {
+                    const revealBtn = document.createElement('button');
+                    revealBtn.className = 'shen-reveal-btn';
+                    revealBtn.type = 'button';
+                    revealBtn.textContent = '👁 Reveal Poster';
+                    let revealed = false;
+                    const infoDiv = document.createElement('span');
+                    infoDiv.className = 'shen-poster-info';
+                    revealBtn.addEventListener('click', () => {
+                        revealed = !revealed;
+                        if (revealed) {
+                            infoDiv.textContent = `Name: ${msg._posterInfo.name || 'N/A'}`;
+                            revealBtn.textContent = '🙈 Hide Poster';
+                        } else {
+                            infoDiv.textContent = '';
+                            revealBtn.textContent = '👁 Reveal Poster';
+                        }
+                    });
+                    shenControls.appendChild(revealBtn);
+                    shenControls.appendChild(infoDiv);
+                }
+                // Delete button
+                const delBtn = document.createElement('button');
+                delBtn.className = 'shen-delete-btn';
+                delBtn.type = 'button';
+                delBtn.textContent = '🗑 Delete';
+                delBtn.addEventListener('click', async () => {
+                    if (!confirm('Delete this public message?')) return;
+                    try {
+                        const res = await fetch(`/api/public-messages/${msg.id}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) {
+                            card.remove();
+                        } else {
+                            alert(data.error || 'Delete failed');
+                        }
+                    } catch (err) {
+                        alert('Delete failed');
+                    }
+                });
+                shenControls.appendChild(delBtn);
+            }
+
             // Comments section
             const commentsSection = document.createElement('div');
             commentsSection.className = 'comments-section';
@@ -229,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             card.appendChild(header);
             card.appendChild(text);
+            if (shenControls) card.appendChild(shenControls);
             card.appendChild(reactionsBar);
             card.appendChild(commentsSection);
             messagesList.appendChild(card);
@@ -264,6 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(res => res.json())
             .then(data => {
                 allMessages = data;
+                // If any message has _posterInfo, SHEN is logged in
+                isShen = Array.isArray(data) && data.some(m => m && typeof m === 'object' && '_posterInfo' in m);
                 filterAndRender();
             })
             .catch(() => {
