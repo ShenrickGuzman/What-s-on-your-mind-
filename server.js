@@ -1010,16 +1010,16 @@ async function migratePublicMessagesRealAccountInfo() {
         // Ensure columns exist before running migration
         await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_username TEXT');
         await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_gmail TEXT');
-        // For each public message where real_username is null and name is not 'Anonymous'
-        const { rows: messages } = await pool.query("SELECT id, name FROM public_messages WHERE real_username IS NULL AND name IS NOT NULL AND name <> 'Anonymous'");
+        // For each public message where real_username is null and name is not null or 'Anonymous'
+        const { rows: messages } = await pool.query("SELECT id, name FROM public_messages WHERE (real_username IS NULL OR real_gmail IS NULL) AND name IS NOT NULL AND name <> 'Anonymous'");
         for (const msg of messages) {
-            // Find user with matching username
-            const { rows: users } = await pool.query('SELECT username, gmail FROM users WHERE username = $1', [msg.name]);
+            // Find user with matching username (case-insensitive)
+            const { rows: users } = await pool.query('SELECT username, gmail FROM users WHERE LOWER(username) = LOWER($1)', [msg.name]);
             if (users.length > 0) {
                 await pool.query('UPDATE public_messages SET real_username = $1, real_gmail = $2 WHERE id = $3', [users[0].username, users[0].gmail, msg.id]);
             }
         }
-        console.log('Migration complete: real_username and real_gmail filled for old public messages.');
+        console.log('Migration complete: real_username and real_gmail filled for all public messages with matching users.');
     } catch (err) {
         console.error('Migration error:', err.message);
     }
