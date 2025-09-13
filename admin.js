@@ -1,4 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Mood Emoji Helper ---
+    function getMoodEmoji(mood) {
+        const moodEmojis = {
+            'Happy': '😀',
+            'Curious': '🤔',
+            'Stressed': '😵‍💫',
+            'Excited': '🎉',
+            'In love': '😍',
+            'Sad': '😢',
+            'Bored': '🥱',
+            'Fine': '🙂'
+        };
+        return moodEmojis[mood] || '';
+    }
     // --- Loading Spinner ---
     window.showLoading = function(show) {
         const spinner = document.getElementById('loadingSpinner');
