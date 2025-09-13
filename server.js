@@ -320,10 +320,11 @@ app.get('/api/public-messages', async (req, res) => {
         let posterMap = {};
         if (isShen) {
             for (const m of messages) {
-                // Always show real_username and real_gmail if present
+                // Always show real_username and real_gmail if present, else provide empty object
                 let posterInfo = {};
                 if (m.real_gmail) posterInfo.gmail = m.real_gmail;
                 if (m.real_username) posterInfo.name = m.real_username;
+                // If no info, still provide empty object
                 posterMap[m.id] = posterInfo;
             }
         }
@@ -347,7 +348,8 @@ app.get('/api/public-messages', async (req, res) => {
                 userReactions: userReactionMap[m.id] || []
             };
             if (isShen) {
-                base._posterInfo = posterMap[m.id];
+                // Always include _posterInfo, even if empty
+                base._posterInfo = posterMap[m.id] || {};
             }
             return base;
         });
