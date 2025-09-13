@@ -1,4 +1,27 @@
 // ...existing code...
+// ...existing code...
+// Delete a user account (admin only)
+app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
+    const userId = req.params.id;
+    if (!userId || isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    try {
+        // Prevent admin from deleting their own account (optional, for safety)
+        if (req.session.user && req.session.user.id == userId) {
+            return res.status(400).json({ error: 'You cannot delete your own account from here.' });
+        }
+        // Check if user exists
+        const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+        if (rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ success: true, message: 'User deleted successfully', deletedId: userId });
+    } catch (err) {
+        console.error('Error deleting user:', err.message);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
 // Place the signup requests endpoints AFTER app is initialized (after 'const app = express();')
 // ...existing code...
 const express = require('express');
