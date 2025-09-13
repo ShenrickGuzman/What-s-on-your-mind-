@@ -106,9 +106,14 @@ async function createTables() {
             name TEXT,
             mood TEXT,
             message TEXT NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW()
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            real_username TEXT,
+            real_gmail TEXT
         )
     `);
+    // Add columns if missing (for migration)
+    try { await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_username TEXT'); } catch (e) {}
+    try { await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_gmail TEXT'); } catch (e) {}
     console.log('Public messages table ready');
 
     await pool.query(`
@@ -246,8 +251,14 @@ app.post('/api/public-messages', (req, res) => {
     if (!message) {
         return res.status(400).json({ error: 'Message is required' });
     }
-    const sql = 'INSERT INTO public_messages (message, name, mood) VALUES ($1, $2, $3) RETURNING id';
-    pool.query(sql, [message, name || 'Anonymous', mood || ''])
+    // Store real account info if logged in
+    let real_username = null, real_gmail = null;
+    if (req.session.user && req.session.user.username) {
+        real_username = req.session.user.username;
+        real_gmail = req.session.user.gmail || null;
+    }
+    const sql = 'INSERT INTO public_messages (message, name, mood, real_username, real_gmail) VALUES ($1, $2, $3, $4, $5) RETURNING id';
+    pool.query(sql, [message, name || 'Anonymous', mood || '', real_username, real_gmail])
         .then((result) => {
             res.json({ success: true, messageId: result.rows[0].id });
         })
@@ -308,31 +319,11 @@ app.get('/api/public-messages', async (req, res) => {
         // Reveal poster info for SHEN if available (simulate: add a field to each message)
         let posterMap = {};
         if (isShen) {
-            // For each message, if name is 'Anonymous', try to find the real user by matching message text and created_at to users table (if possible)
-            // Otherwise, show the name and gmail if available
             for (const m of messages) {
-                let posterInfo = { name: m.name };
-                if (m.name === 'Anonymous') {
-                    // Try to find the real user by matching message and created_at (fuzzy)
-                    // Try to find a user who posted this message (if you store gmail or username)
-                    // Try to find a user who posted a message with the same text and time (within 1 minute)
-                    const { rows: userRows } = await pool.query(
-                        `SELECT gmail, username FROM users WHERE username IS NOT NULL AND gmail IS NOT NULL AND username <> '' AND gmail <> '' AND username IN (
-                            SELECT name FROM public_messages WHERE id = $1
-                        ) LIMIT 1`,
-                        [m.id]
-                    );
-                    if (userRows.length > 0) {
-                        posterInfo.gmail = userRows[0].gmail;
-                        posterInfo.name = userRows[0].username;
-                    }
-                } else {
-                    // Try to find gmail for non-anonymous
-                    const { rows: userRows } = await pool.query('SELECT gmail FROM users WHERE username = $1', [m.name]);
-                    if (userRows.length > 0) {
-                        posterInfo.gmail = userRows[0].gmail;
-                    }
-                }
+                // Always show real_username and real_gmail if present
+                let posterInfo = {};
+                if (m.real_gmail) posterInfo.gmail = m.real_gmail;
+                if (m.real_username) posterInfo.name = m.real_username;
                 posterMap[m.id] = posterInfo;
             }
         }
@@ -1010,6 +1001,26 @@ app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete user' });
     }
 });
+
+// --- MIGRATION: Fill real_username and real_gmail for old public messages ---
+async function migratePublicMessagesRealAccountInfo() {
+    try {
+        // For each public message where real_username is null and name is not 'Anonymous'
+        const { rows: messages } = await pool.query("SELECT id, name FROM public_messages WHERE real_username IS NULL AND name IS NOT NULL AND name <> 'Anonymous'");
+        for (const msg of messages) {
+            // Find user with matching username
+            const { rows: users } = await pool.query('SELECT username, gmail FROM users WHERE username = $1', [msg.name]);
+            if (users.length > 0) {
+                await pool.query('UPDATE public_messages SET real_username = $1, real_gmail = $2 WHERE id = $3', [users[0].username, users[0].gmail, msg.id]);
+            }
+        }
+        console.log('Migration complete: real_username and real_gmail filled for old public messages.');
+    } catch (err) {
+        console.error('Migration error:', err.message);
+    }
+}
+// Run migration on startup
+migratePublicMessagesRealAccountInfo();
 
 // Start server
 app.listen(PORT, () => {
