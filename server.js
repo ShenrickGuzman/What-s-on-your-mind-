@@ -281,7 +281,7 @@ app.get('/api/messages', requireAuth, (req, res) => {
             const isShen = req.session.user && req.session.user.username && req.session.user.username.toLowerCase() === 'shen';
             let enriched = rows;
             if (isShen) {
-                // Try to find real account info for each message (by name)
+                // Always include _posterInfo, even if empty
                 enriched = await Promise.all(rows.map(async m => {
                     let posterInfo = {};
                     if (m.name && m.name !== 'Anonymous') {
@@ -290,6 +290,7 @@ app.get('/api/messages', requireAuth, (req, res) => {
                             posterInfo = { name: users[0].username, gmail: users[0].gmail };
                         }
                     }
+                    // Always attach _posterInfo, even if empty
                     return { ...m, _posterInfo: posterInfo };
                 }));
             }
