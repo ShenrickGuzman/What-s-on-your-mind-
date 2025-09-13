@@ -1,4 +1,33 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Toast Notification ---
+    window.showToast = function(type, message) {
+        let toast = document.getElementById('toastNotification');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toastNotification';
+            toast.style.position = 'fixed';
+            toast.style.bottom = '30px';
+            toast.style.left = '50%';
+            toast.style.transform = 'translateX(-50%)';
+            toast.style.zIndex = '9999';
+            toast.style.minWidth = '200px';
+            toast.style.padding = '16px 32px';
+            toast.style.borderRadius = '8px';
+            toast.style.fontSize = '1.1rem';
+            toast.style.color = '#fff';
+            toast.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+            toast.style.textAlign = 'center';
+            toast.style.display = 'none';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.style.background = type === 'success' ? '#4caf50' : '#e74c3c';
+        toast.style.display = 'block';
+        clearTimeout(window._toastTimeout);
+        window._toastTimeout = setTimeout(() => {
+            toast.style.display = 'none';
+        }, 3000);
+    };
     // All users section elements
     const allUsersSection = document.getElementById('allUsersSection');
     const allUsersList = document.getElementById('allUsersList');
