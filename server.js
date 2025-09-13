@@ -993,11 +993,20 @@ app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
         if (req.session.user && req.session.user.id == userId) {
             return res.status(400).json({ error: 'You cannot delete your own account from here.' });
         }
+        // Get the user's gmail before deleting
+        const { rows: userRows } = await pool.query('SELECT gmail FROM users WHERE id = $1', [userId]);
+        if (userRows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const gmail = userRows[0].gmail;
+        // Delete the user
         const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
         if (rowCount === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
-        res.json({ success: true, message: 'User deleted successfully', deletedId: userId });
+        // Also delete any signup_requests with the same gmail
+        await pool.query('DELETE FROM signup_requests WHERE gmail = $1', [gmail]);
+        res.json({ success: true, message: 'User and related signup requests deleted successfully', deletedId: userId });
     } catch (err) {
         console.error('Error deleting user:', err.message);
         res.status(500).json({ error: 'Failed to delete user' });
