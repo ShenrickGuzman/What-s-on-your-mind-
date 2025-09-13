@@ -164,9 +164,15 @@ async function createTables() {
         )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_public_message_reactions_msg_id ON public_message_reactions(public_message_id)`);
-    // Unique per user per reaction type (anonymous rows excluded because username IS NULL)
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_public_reaction_user ON public_message_reactions(public_message_id, username, reaction_type) WHERE username IS NOT NULL`);
-    console.log('Public message reactions table ready');
+    // Ensure a non-partial unique index for ON CONFLICT inference (NULL usernames allow duplicates for anonymous)
+    try {
+        // Drop old partial index if it exists (previous migration attempt)
+        await pool.query('DROP INDEX IF EXISTS uniq_public_reaction_user');
+    } catch (e) {
+        console.warn('Could not drop old partial index uniq_public_reaction_user:', e.message);
+    }
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_public_reaction_user_full ON public_message_reactions(public_message_id, username, reaction_type)`);
+    console.log('Public message reactions table & indexes ready');
 
     await createDefaultAdmin();
 }
@@ -407,7 +413,7 @@ app.post('/api/public-messages/:id/react', async (req, res) => {
             await pool.query(`
                 INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
                 VALUES ($1, $2, false, $3)
-                ON CONFLICT ON CONSTRAINT uniq_public_reaction_user DO NOTHING
+                ON CONFLICT (public_message_id, username, reaction_type) DO NOTHING
             `, [id, username, type]);
             // Check if exists to decide toggle off
             const { rows } = await pool.query(`
