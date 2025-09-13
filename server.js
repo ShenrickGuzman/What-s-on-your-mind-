@@ -138,6 +138,36 @@ async function createTables() {
     `);
     console.log('Password reset tokens table ready');
 
+    // New: Public message comments
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS public_message_comments (
+            id SERIAL PRIMARY KEY,
+            public_message_id INTEGER REFERENCES public_messages(id) ON DELETE CASCADE,
+            username TEXT,
+            is_anonymous BOOLEAN DEFAULT FALSE,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_public_message_comments_msg_id ON public_message_comments(public_message_id)`);
+    console.log('Public message comments table ready');
+
+    // New: Public message reactions
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS public_message_reactions (
+            id SERIAL PRIMARY KEY,
+            public_message_id INTEGER REFERENCES public_messages(id) ON DELETE CASCADE,
+            username TEXT,
+            is_anonymous BOOLEAN DEFAULT FALSE,
+            reaction_type TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_public_message_reactions_msg_id ON public_message_reactions(public_message_id)`);
+    // Unique per user per reaction type (anonymous rows excluded because username IS NULL)
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_public_reaction_user ON public_message_reactions(public_message_id, username, reaction_type) WHERE username IS NOT NULL`);
+    console.log('Public message reactions table ready');
+
     await createDefaultAdmin();
 }
 
@@ -239,14 +269,197 @@ app.get('/api/messages', requireAuth, (req, res) => {
 });
 
 // Get all public messages
-app.get('/api/public-messages', (req, res) => {
-    const sql = 'SELECT * FROM public_messages ORDER BY created_at DESC LIMIT 100';
-    pool.query(sql)
-        .then(({ rows }) => res.json(rows))
-        .catch((err) => {
-            console.error('Error fetching public messages:', err.message);
-            res.status(500).json({ error: 'Failed to fetch public messages' });
+app.get('/api/public-messages', async (req, res) => {
+    try {
+        const { rows: messages } = await pool.query('SELECT * FROM public_messages ORDER BY created_at DESC LIMIT 100');
+        if (messages.length === 0) return res.json([]);
+        const ids = messages.map(m => m.id);
+        // Reaction counts
+        const { rows: reactionRows } = await pool.query(`
+            SELECT public_message_id, reaction_type, COUNT(*)::int AS count
+            FROM public_message_reactions
+            WHERE public_message_id = ANY($1)
+            GROUP BY public_message_id, reaction_type
+        `, [ids]);
+        // Comment counts
+        const { rows: commentRows } = await pool.query(`
+            SELECT public_message_id, COUNT(*)::int AS count
+            FROM public_message_comments
+            WHERE public_message_id = ANY($1)
+            GROUP BY public_message_id
+        `, [ids]);
+        // User reactions (if logged in)
+        let userReactionRows = [];
+        if (req.session.user && req.session.user.username) {
+            const { rows } = await pool.query(`
+                SELECT public_message_id, reaction_type
+                FROM public_message_reactions
+                WHERE public_message_id = ANY($1) AND username = $2
+            `, [ids, req.session.user.username]);
+            userReactionRows = rows;
+        }
+        const reactionMap = {};
+        reactionRows.forEach(r => {
+            if (!reactionMap[r.public_message_id]) reactionMap[r.public_message_id] = {};
+            reactionMap[r.public_message_id][r.reaction_type] = r.count;
         });
+        const commentCountMap = {};
+        commentRows.forEach(c => { commentCountMap[c.public_message_id] = c.count; });
+        const userReactionMap = {};
+        userReactionRows.forEach(ur => {
+            if (!userReactionMap[ur.public_message_id]) userReactionMap[ur.public_message_id] = [];
+            userReactionMap[ur.public_message_id].push(ur.reaction_type);
+        });
+        const enriched = messages.map(m => ({
+            ...m,
+            reactionCounts: reactionMap[m.id] || {},
+            commentCount: commentCountMap[m.id] || 0,
+            userReactions: userReactionMap[m.id] || []
+        }));
+        res.json(enriched);
+    } catch (err) {
+        console.error('Error fetching public messages:', err.message);
+        res.status(500).json({ error: 'Failed to fetch public messages' });
+    }
+});
+
+// --- Public Message Comments Endpoints ---
+const MAX_COMMENT_LENGTH = 500;
+function sanitizeTrim(text) {
+    if (typeof text !== 'string') return '';
+    return text.trim();
+}
+
+app.get('/api/public-messages/:id/comments', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    try {
+        const { rows } = await pool.query(`
+            SELECT id, public_message_id, username, is_anonymous, comment, created_at
+            FROM public_message_comments
+            WHERE public_message_id = $1
+            ORDER BY created_at ASC
+        `, [id]);
+        res.json(rows.map(r => ({
+            ...r,
+            displayName: r.is_anonymous || !r.username ? 'Anonymous' : r.username
+        })));
+    } catch (err) {
+        console.error('Error fetching comments:', err.message);
+        res.status(500).json({ error: 'Failed to fetch comments' });
+    }
+});
+
+app.post('/api/public-messages/:id/comments', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    const { comment, anonymous } = req.body;
+    const cleaned = sanitizeTrim(comment);
+    if (!cleaned) return res.status(400).json({ error: 'Comment required' });
+    if (cleaned.length > MAX_COMMENT_LENGTH) return res.status(400).json({ error: `Comment too long (max ${MAX_COMMENT_LENGTH})` });
+    const username = req.session.user && req.session.user.username ? req.session.user.username : null;
+    const isAnon = anonymous || !username;
+    try {
+        const { rows } = await pool.query(`
+            INSERT INTO public_message_comments (public_message_id, username, is_anonymous, comment)
+            VALUES ($1, $2, $3, $4) RETURNING id, created_at
+        `, [id, isAnon ? null : username, isAnon, cleaned]);
+        res.json({ success: true, comment: { id: rows[0].id, public_message_id: id, comment: cleaned, created_at: rows[0].created_at, username: isAnon ? null : username, is_anonymous: isAnon, displayName: isAnon ? 'Anonymous' : username } });
+    } catch (err) {
+        console.error('Error adding comment:', err.message);
+        res.status(500).json({ error: 'Failed to add comment' });
+    }
+});
+
+app.delete('/api/public-messages/:id/comments/:commentId', async (req, res) => {
+    const messageId = parseInt(req.params.id, 10);
+    const commentId = parseInt(req.params.commentId, 10);
+    if (isNaN(messageId) || isNaN(commentId)) return res.status(400).json({ error: 'Invalid ids' });
+    try {
+        const { rows } = await pool.query('SELECT username FROM public_message_comments WHERE id = $1 AND public_message_id = $2', [commentId, messageId]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Comment not found' });
+        const comment = rows[0];
+        const sessionUsername = req.session.user && req.session.user.username;
+        const isAdmin = !!req.session.authenticated; // admin session flag
+        if (!(isAdmin || (sessionUsername && comment.username && sessionUsername === comment.username))) {
+            return res.status(403).json({ error: 'Not authorized to delete this comment' });
+        }
+        await pool.query('DELETE FROM public_message_comments WHERE id = $1', [commentId]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error deleting comment:', err.message);
+        res.status(500).json({ error: 'Failed to delete comment' });
+    }
+});
+
+// --- Public Message Reactions Endpoints ---
+const ALLOWED_REACTIONS = ['like', 'heart', 'laugh', 'wow', 'sad'];
+app.post('/api/public-messages/:id/react', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    const { type } = req.body;
+    if (!ALLOWED_REACTIONS.includes(type)) return res.status(400).json({ error: 'Invalid reaction type' });
+    const username = req.session.user && req.session.user.username ? req.session.user.username : null;
+    if (username) {
+        // Toggle behavior for logged-in user
+        try {
+            // Attempt insert
+            await pool.query(`
+                INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
+                VALUES ($1, $2, false, $3)
+                ON CONFLICT ON CONSTRAINT uniq_public_reaction_user DO NOTHING
+            `, [id, username, type]);
+            // Check if exists to decide toggle off
+            const { rows } = await pool.query(`
+                SELECT id FROM public_message_reactions WHERE public_message_id = $1 AND username = $2 AND reaction_type = $3
+            `, [id, username, type]);
+            if (rows.length > 1) {
+                // Shouldn't happen, cleanup
+                await pool.query('DELETE FROM public_message_reactions WHERE id <> $1 AND public_message_id = $2 AND username = $3 AND reaction_type = $4', [rows[0].id, id, username, type]);
+            } else if (rows.length === 1) {
+                // Already exists -> toggle off request? Determine if user intended toggle off.
+                // We'll use a query parameter 'toggle' = true? Simpler: if client wants to remove, send {remove:true}
+            }
+            // If client requested remove explicitly
+            if (req.body.remove) {
+                await pool.query('DELETE FROM public_message_reactions WHERE public_message_id = $1 AND username = $2 AND reaction_type = $3', [id, username, type]);
+            }
+        } catch (err) {
+            console.error('Reaction toggle error (logged-in):', err.message);
+            return res.status(500).json({ error: 'Failed to react' });
+        }
+    } else {
+        // Anonymous reaction (always additive)
+        try {
+            await pool.query(`
+                INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
+                VALUES ($1, NULL, true, $2)
+            `, [id, type]);
+        } catch (err) {
+            console.error('Reaction add error (anonymous):', err.message);
+            return res.status(500).json({ error: 'Failed to react' });
+        }
+    }
+    // Return updated counts and userReactions
+    try {
+        const { rows: counts } = await pool.query(`
+            SELECT reaction_type, COUNT(*)::int AS count
+            FROM public_message_reactions
+            WHERE public_message_id = $1
+            GROUP BY reaction_type
+        `, [id]);
+        const reactionCounts = {};
+        counts.forEach(c => { reactionCounts[c.reaction_type] = c.count; });
+        let userReactions = [];
+        if (username) {
+            const { rows } = await pool.query('SELECT reaction_type FROM public_message_reactions WHERE public_message_id = $1 AND username = $2', [id, username]);
+            userReactions = rows.map(r => r.reaction_type);
+        }
+        res.json({ success: true, reactionCounts, userReactions });
+    } catch (err) {
+        console.error('Error returning reaction counts:', err.message);
+        res.status(500).json({ error: 'Failed to fetch reaction counts' });
+    }
 });
 
 // Delete a message (admin only)
