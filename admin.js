@@ -740,10 +740,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // SHEN admin controls (delete/reveal)
         let shenControls = '';
         if (currentUserInfo && currentUserInfo.username && currentUserInfo.username.toLowerCase() === 'shen') {
-            // Reveal poster info if available (for any message, not just public)
-            if (message._posterInfo && (message._posterInfo.name || message._posterInfo.gmail)) {
-                shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${message._posterInfo.name || ''}', '${message._posterInfo.gmail || ''}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
-            }
+            // Always show Reveal Poster button for SHEN
+            const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
+            const gmail = message._posterInfo && message._posterInfo.gmail ? message._posterInfo.gmail : '';
+            shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${name}', '${gmail}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
             // Delete button (for public messages only)
             if (message.is_public) {
                 shenControls += `<button class="shen-delete-btn" type="button" onclick="window.deletePublicMessage(${message.id}, this)">🗑 Delete</button>`;
