@@ -1,25 +1,4 @@
-// Delete a user account (admin only)
-app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
-    const userId = req.params.id;
-    if (!userId || isNaN(userId)) {
-        return res.status(400).json({ error: 'Invalid user ID' });
-    }
-    try {
-        // Prevent admin from deleting their own account (optional, for safety)
-        if (req.session.user && req.session.user.id == userId) {
-            return res.status(400).json({ error: 'You cannot delete your own account from here.' });
-        }
-        // Check if user exists
-        const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-        if (rowCount === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        res.json({ success: true, message: 'User deleted successfully', deletedId: userId });
-    } catch (err) {
-        console.error('Error deleting user:', err.message);
-        res.status(500).json({ error: 'Failed to delete user' });
-    }
-});
+// (delete-user route moved below after all middleware & helpers are defined)
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -510,53 +489,40 @@ app.get('/api/admin/users', requireAuth, (req, res) => {
 });
 
 // Delete admin user (super admin only)
-app.delete('/api/admin/users/:id', requireAuth, (req, res) => {
+app.delete('/api/admin/users/:id', requireAuth, async (req, res) => {
     const userId = req.params.id;
-    
     if (!userId || isNaN(userId)) {
         return res.status(400).json({ error: 'Invalid user ID' });
     }
-    
-    // Check if current user is super admin
-    db.get('SELECT is_owner FROM admin_users WHERE id = ?', [req.session.userId], (err, user) => {
-        if (err) {
-            console.error('Error checking user permissions:', err.message);
-            res.status(500).json({ error: 'Failed to check permissions' });
-        } else if (!user || !user.is_owner) {
-            res.status(403).json({ error: 'Only owners can delete users' });
-        } else if (parseInt(userId) === req.session.userId) {
-            res.status(400).json({ error: 'Cannot delete your own account' });
-        } else {
-            // Check if target user is super admin
-            db.get('SELECT is_owner FROM admin_users WHERE id = ?', [userId], (err, targetUser) => {
-                if (err) {
-                    console.error('Error checking target user:', err.message);
-                    res.status(500).json({ error: 'Failed to check target user' });
-                } else if (!targetUser) {
-                    res.status(404).json({ error: 'User not found' });
-                } else if (targetUser.is_owner) {
-                    res.status(403).json({ error: 'Cannot delete owner accounts' });
-                } else {
-                    // Delete the user
-                    db.run('DELETE FROM admin_users WHERE id = ?', [userId], function(err) {
-                        if (err) {
-                            console.error('Error deleting admin user:', err.message);
-                            res.status(500).json({ error: 'Failed to delete user' });
-                        } else if (this.changes === 0) {
-                            res.status(404).json({ error: 'User not found' });
-                        } else {
-                            console.log(`Admin user ${userId} deleted successfully`);
-                            res.json({ 
-                                success: true, 
-                                message: 'Admin user deleted successfully',
-                                deletedId: userId
-                            });
-                        }
-                    });
-                }
-            });
+    try {
+        // Check if current user is super admin
+        const { rows: currentRows } = await pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [req.session.userId]);
+        const currentUser = currentRows[0];
+        if (!currentUser || !currentUser.is_owner) {
+            return res.status(403).json({ error: 'Only owners can delete users' });
         }
-    });
+        if (parseInt(userId) === req.session.userId) {
+            return res.status(400).json({ error: 'Cannot delete your own account' });
+        }
+        // Check target user
+        const { rows: targetRows } = await pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [userId]);
+        const targetUser = targetRows[0];
+        if (!targetUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        if (targetUser.is_owner) {
+            return res.status(403).json({ error: 'Cannot delete owner accounts' });
+        }
+        const result = await pool.query('DELETE FROM admin_users WHERE id = $1', [userId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        console.log(`Admin user ${userId} deleted successfully`);
+        res.json({ success: true, message: 'Admin user deleted successfully', deletedId: userId });
+    } catch (err) {
+        console.error('Error deleting admin user:', err.message);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
 });
 
 // Serve admin page
@@ -747,6 +713,28 @@ app.post('/api/auth/signup-requests/:id/decline', requireAuth, async (req, res) 
     } catch (err) {
         console.error('Error declining signup request:', err.message);
         res.status(500).json({ error: 'Failed to decline signup request' });
+    }
+});
+
+// Delete a user account (admin only) - placed AFTER app, middleware, and tables creation
+app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
+    const userId = req.params.id;
+    if (!userId || isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    try {
+        // Optional safety: prevent deleting own admin-linked user account if mapped
+        if (req.session.user && req.session.user.id == userId) {
+            return res.status(400).json({ error: 'You cannot delete your own account from here.' });
+        }
+        const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+        if (rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ success: true, message: 'User deleted successfully', deletedId: userId });
+    } catch (err) {
+        console.error('Error deleting user:', err.message);
+        res.status(500).json({ error: 'Failed to delete user' });
     }
 });
 
