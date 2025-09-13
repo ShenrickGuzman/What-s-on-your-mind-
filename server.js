@@ -1005,6 +1005,9 @@ app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
 // --- MIGRATION: Fill real_username and real_gmail for old public messages ---
 async function migratePublicMessagesRealAccountInfo() {
     try {
+        // Ensure columns exist before running migration
+        await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_username TEXT');
+        await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_gmail TEXT');
         // For each public message where real_username is null and name is not 'Anonymous'
         const { rows: messages } = await pool.query("SELECT id, name FROM public_messages WHERE real_username IS NULL AND name IS NOT NULL AND name <> 'Anonymous'");
         for (const msg of messages) {
