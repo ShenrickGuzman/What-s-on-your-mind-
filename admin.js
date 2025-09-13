@@ -746,16 +746,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // SHEN admin controls (delete/reveal)
         let shenControls = '';
-    if (window.currentUserInfo && window.currentUserInfo.username && window.currentUserInfo.username.toLowerCase() === 'shen') {
-        // Always show Reveal Poster button for SHEN (for all messages)
-        const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
-        const gmail = message._posterInfo && message._posterInfo.gmail ? message._posterInfo.gmail : '';
-        shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${name}', '${gmail}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
-        // Delete button (for public messages only)
-        if (message.is_public) {
-            shenControls += `<button class="shen-delete-btn" type="button" onclick="window.deletePublicMessage(${message.id}, this)">🗑 Delete</button>`;
+        if (window.currentUserInfo && window.currentUserInfo.username && window.currentUserInfo.username.toLowerCase() === 'shen') {
+            // Always show Reveal Poster button for SHEN (for all messages)
+            const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
+            const gmail = message._posterInfo && message._posterInfo.gmail ? message._posterInfo.gmail : '';
+            shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${name}', '${gmail}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
+            // Delete button (for public messages only)
+            if (message.is_public) {
+                shenControls += `<button class="shen-delete-btn" type="button" onclick="window.deletePublicMessage(${message.id}, this)">🗑 Delete</button>`;
+            }
         }
-    }
 
         return `
             <div class="message-card ${isPinned ? 'pinned' : ''}" data-id="${message.id}">
@@ -773,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="delete-btn" onclick="deleteMessage(${message.id})" title="Delete message">
                             <i class="fas fa-trash"></i>
                         </button>
-                        ${shenControls}
+                        ${shenControls ? `<div class="shen-controls">${shenControls}</div>` : ''}
                     </div>
                 </div>
                 <div class="message-text">${message.message}</div>
