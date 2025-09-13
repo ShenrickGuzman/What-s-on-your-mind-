@@ -740,9 +740,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // SHEN admin controls (delete/reveal)
         let shenControls = '';
         if (currentUserInfo && currentUserInfo.username && currentUserInfo.username.toLowerCase() === 'shen') {
-            // Reveal poster info if available
+            // Reveal poster info if available (for any message, not just public)
             if (message._posterInfo && (message._posterInfo.name || message._posterInfo.gmail)) {
-                shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${message._posterInfo.name || ''}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
+                shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${message._posterInfo.name || ''}', '${message._posterInfo.gmail || ''}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
             }
             // Delete button (for public messages only)
             if (message.is_public) {
@@ -777,8 +777,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // SHEN reveal/hide logic
     window.toggleRevealPoster = function(btn, name) {
         const infoSpan = btn.nextElementSibling;
+        const gmail = arguments[2] || '';
         if (btn.textContent.includes('Reveal')) {
-            infoSpan.textContent = `Name: ${name || 'N/A'}`;
+            let info = '';
+            if (gmail) {
+                info = `Gmail: ${gmail}`;
+            } else if (name) {
+                info = `Name: ${name}`;
+            } else {
+                info = 'Unknown';
+            }
+            infoSpan.textContent = info;
             btn.textContent = '🙈 Hide Poster';
         } else {
             infoSpan.textContent = '';
