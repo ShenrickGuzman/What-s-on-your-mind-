@@ -746,6 +746,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // SHEN admin controls (delete/reveal)
         let shenControls = '';
+        console.log('DEBUG: currentUserInfo', window.currentUserInfo);
+        console.log('DEBUG: message._posterInfo', message._posterInfo);
         if (window.currentUserInfo && window.currentUserInfo.username && window.currentUserInfo.username.toLowerCase() === 'shen') {
             // Always show Reveal Poster button for SHEN (for all messages)
             const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
