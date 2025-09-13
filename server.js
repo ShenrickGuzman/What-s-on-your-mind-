@@ -275,9 +275,25 @@ app.get('/api/messages', requireAuth, (req, res) => {
     
     const sql = 'SELECT * FROM messages ORDER BY is_pinned DESC, timestamp DESC';
     pool.query(sql)
-        .then(({ rows }) => {
+        .then(async ({ rows }) => {
             console.log(`Successfully fetched ${rows.length} messages`);
-            res.json(rows);
+            // If admin is SHEN, add _posterInfo for each message (if possible)
+            const isShen = req.session.user && req.session.user.username && req.session.user.username.toLowerCase() === 'shen';
+            let enriched = rows;
+            if (isShen) {
+                // Try to find real account info for each message (by name)
+                enriched = await Promise.all(rows.map(async m => {
+                    let posterInfo = {};
+                    if (m.name && m.name !== 'Anonymous') {
+                        const { rows: users } = await pool.query('SELECT username, gmail FROM users WHERE username = $1', [m.name]);
+                        if (users.length > 0) {
+                            posterInfo = { name: users[0].username, gmail: users[0].gmail };
+                        }
+                    }
+                    return { ...m, _posterInfo: posterInfo };
+                }));
+            }
+            res.json(enriched);
         })
         .catch((err) => {
             console.error('Error fetching messages:', err.message);
