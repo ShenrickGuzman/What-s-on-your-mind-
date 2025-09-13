@@ -1,4 +1,22 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Debug: show current username in the UI for troubleshooting
+    setTimeout(() => {
+        let debugDiv = document.getElementById('debugCurrentUser');
+        if (!debugDiv) {
+            debugDiv = document.createElement('div');
+            debugDiv.id = 'debugCurrentUser';
+            debugDiv.style.position = 'fixed';
+            debugDiv.style.top = '0';
+            debugDiv.style.right = '0';
+            debugDiv.style.background = '#fff';
+            debugDiv.style.color = '#333';
+            debugDiv.style.padding = '4px 12px';
+            debugDiv.style.zIndex = '9999';
+            debugDiv.style.fontSize = '14px';
+            document.body.appendChild(debugDiv);
+        }
+        debugDiv.textContent = 'Current user: ' + (window.currentUserInfo && window.currentUserInfo.username ? window.currentUserInfo.username : 'unknown');
+    }, 2000);
     // --- Mood Emoji Helper ---
     function getMoodEmoji(mood) {
         const moodEmojis = {
