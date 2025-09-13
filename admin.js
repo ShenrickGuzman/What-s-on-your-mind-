@@ -686,7 +686,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const timestamp = new Date(message.timestamp).toLocaleString();
         const moodEmoji = getMoodEmoji(message.mood);
         const isPinned = isPinnedFlag(message);
-        
+
+        // SHEN admin controls (delete/reveal)
+        let shenControls = '';
+        if (currentUserInfo && currentUserInfo.username && currentUserInfo.username.toLowerCase() === 'shen') {
+            // Reveal poster info if available
+            if (message._posterInfo && (message._posterInfo.name || message._posterInfo.gmail)) {
+                shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${message._posterInfo.name || ''}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
+            }
+            // Delete button (for public messages only)
+            if (message.is_public) {
+                shenControls += `<button class="shen-delete-btn" type="button" onclick="window.deletePublicMessage(${message.id}, this)">🗑 Delete</button>`;
+            }
+        }
+
         return `
             <div class="message-card ${isPinned ? 'pinned' : ''}" data-id="${message.id}">
                 <div class="message-header">
@@ -703,58 +716,42 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="delete-btn" onclick="deleteMessage(${message.id})" title="Delete message">
                             <i class="fas fa-trash"></i>
                         </button>
+                        ${shenControls}
                     </div>
                 </div>
                 <div class="message-text">${message.message}</div>
             </div>
         `;
     }
-    
-    function getMoodEmoji(mood) {
-        const moodEmojis = {
-            'Happy': '😀',
-            'Curious': '🤔',
-            'Stressed': '😵‍💫',
-            'Excited': '🎉',
-            'In love': '😍',
-            'Sad': '😢',
-            'Bored': '🥱',
-            'Fine': '🙂'
-        };
-        return moodEmojis[mood] || '😊';
-    }
-    
-    function showLoading(show) {
-        if (show) {
-            loadingSpinner.classList.remove('hidden');
-            messagesList.innerHTML = '';
-            noMessages.classList.add('hidden');
+
+    // SHEN reveal/hide logic
+    window.toggleRevealPoster = function(btn, name) {
+        const infoSpan = btn.nextElementSibling;
+        if (btn.textContent.includes('Reveal')) {
+            infoSpan.textContent = `Name: ${name || 'N/A'}`;
+            btn.textContent = '🙈 Hide Poster';
         } else {
-            loadingSpinner.classList.add('hidden');
+            infoSpan.textContent = '';
+            btn.textContent = '👁 Reveal Poster';
         }
-    }
-    
-    // Toast notifications
-    function showToast(type, message) {
-        const toast = document.getElementById(`${type}Toast`);
-        const messageSpan = document.getElementById(`${type}Message`);
-        
-        messageSpan.textContent = message;
-        toast.classList.remove('hidden');
-        
-        setTimeout(() => {
-            toast.classList.add('hidden');
-        }, 4000);
-    }
-    
-    // Auto-refresh every 30 seconds
-    setInterval(() => {
-        if (dashboard.classList.contains('hidden')) return;
-        loadMessages();
-    }, 30000);
-    
-    // Global functions for onclick handlers
-    window.togglePinMessage = togglePinMessage;
+    };
+
+    // SHEN delete public message logic
+    window.deletePublicMessage = async function(id, btn) {
+        if (!confirm('Delete this public message?')) return;
+        try {
+            const res = await fetch(`/api/public-messages/${id}`, { method: 'DELETE', credentials: 'include' });
+            const data = await res.json();
+            if (data.success) {
+                // Remove card from DOM
+                btn.closest('.message-card').remove();
+            } else {
+                alert(data.error || 'Delete failed');
+            }
+        } catch (err) {
+            alert('Delete failed');
+        }
+    };
     
     // Delete message function (global scope for onclick)
     window.deleteMessage = async function(messageId) {
