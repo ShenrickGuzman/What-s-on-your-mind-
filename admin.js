@@ -402,24 +402,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function loadUserInfo() {
         try {
-            const response = await fetch(`${API_BASE}/admin/users`, {
-                credentials: 'include'
-            });
-            if (response.ok) {
-                const users = await response.json();
-                // If currentUserInfo is not set, try to infer from session
-                if (!currentUserInfo || !currentUserInfo.username) {
-                    // Try to get the username from the first user with is_owner or just the first user
-                    const sessionUser = users.find(user => user.is_owner) || users[0];
-                    if (sessionUser) {
-                        currentUserInfo = sessionUser;
-                    }
+            // First, get the current admin's userId from status endpoint
+            const statusRes = await fetch(`${API_BASE}/admin/status`, { credentials: 'include' });
+            const statusData = await statusRes.json();
+            let userId = statusData.userId;
+            // Now get all admin users
+            const usersRes = await fetch(`${API_BASE}/admin/users`, { credentials: 'include' });
+            if (usersRes.ok) {
+                const users = await usersRes.json();
+                // Find the current user by id
+                const currentUserData = users.find(user => user.id === userId);
+                if (currentUserData) {
+                    currentUserInfo = currentUserData;
                 } else {
-                    // Try to update info if id matches
-                    const currentUserData = users.find(user => user.id === currentUserInfo.id);
-                    if (currentUserData) {
-                        currentUserInfo = currentUserData;
-                    }
+                    // fallback: just use first user
+                    currentUserInfo = users[0];
                 }
                 isOwner = currentUserInfo && currentUserInfo.is_owner === 1;
                 updateUserDisplay();
