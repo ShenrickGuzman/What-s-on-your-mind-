@@ -1624,6 +1624,29 @@ body {
 .submit-comment-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(56,161,105,0.35); }
 .submit-comment-btn:active { transform: translateY(0); }
 
+/* Add Comment Toggle Button */
+.add-comment-toggle-btn {
+    margin-top: 12px;
+    background: #eef2ff;
+    border: 2px solid #cbd5e0;
+    color: #4a5568;
+    padding: 8px 16px;
+    border-radius: 18px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: .5px;
+    cursor: pointer;
+    transition: all .25s ease;
+    align-self: flex-start;
+}
+.add-comment-toggle-btn:hover {
+    background: #fff;
+    border-color: #a0aec0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+    transform: translateY(-2px);
+}
+.add-comment-toggle-btn:active { transform: translateY(0); }
+
 /* Small screen adjustments */
 @media (max-width: 600px) {
   .reactions-bar { gap: 6px; }
