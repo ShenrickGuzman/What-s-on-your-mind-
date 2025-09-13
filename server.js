@@ -1,3 +1,5 @@
+// All top-level await code is now wrapped in an async IIFE for Node.js v24+ compatibility
+(async () => {
     // Add columns if missing (for migration)
     try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_username TEXT'); } catch (e) {}
     try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_gmail TEXT'); } catch (e) {}
@@ -1103,3 +1105,4 @@ process.on('SIGINT', async () => {
     }
     process.exit(0);
 });
+})();
