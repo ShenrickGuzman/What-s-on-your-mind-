@@ -80,6 +80,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             btn.dataset.reaction = r.key;
             btn.innerHTML = `${r.label} <span class="reaction-count">${count}</span>`;
+            btn.setAttribute('type', 'button');
+            btn.setAttribute('aria-label', `${r.key} reaction, count ${count}`);
+            btn.setAttribute('aria-pressed', btn.classList.contains('reacted') ? 'true' : 'false');
+            btn.setAttribute('role', 'button');
             btn.addEventListener('click', async () => {
                 // Determine toggle (if user had reacted and is logged in) -> send remove flag
                 const isActive = btn.classList.contains('reacted');
@@ -97,7 +101,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             const btn2 = bar.querySelector(`button[data-reaction="${r2.key}"]`);
                             const newCount = data.reactionCounts[r2.key] || 0;
                             btn2.querySelector('.reaction-count').textContent = newCount;
-                            if (data.userReactions && data.userReactions.includes(r2.key)) btn2.classList.add('reacted'); else btn2.classList.remove('reacted');
+                            const active = data.userReactions && data.userReactions.includes(r2.key);
+                            btn2.classList.toggle('reacted', active);
+                            btn2.setAttribute('aria-pressed', active ? 'true' : 'false');
+                            btn2.setAttribute('aria-label', `${r2.key} reaction, count ${newCount}${active ? ', active' : ''}`);
                         });
                     }
                 } catch (err) {
@@ -139,8 +146,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const toggleBtn = document.createElement('button');
             toggleBtn.className = 'toggle-comments-btn';
             toggleBtn.textContent = `Show Comments (${msg.commentCount || 0})`;
+            toggleBtn.setAttribute('type', 'button');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            toggleBtn.setAttribute('aria-controls', `comments-for-${msg.id}`);
             const commentsContainer = document.createElement('div');
             commentsContainer.className = 'comments-container hidden';
+            commentsContainer.id = `comments-for-${msg.id}`;
             const form = document.createElement('form');
             form.className = 'add-comment-form hidden';
             form.innerHTML = `
@@ -158,10 +169,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 commentsContainer.classList.toggle('hidden');
                 form.classList.toggle('hidden');
+                const expanded = !commentsContainer.classList.contains('hidden');
+                toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
                 if (!hidden) {
                     // Closing
                     const count = commentsContainer.querySelectorAll('.comment-item').length;
                     toggleBtn.textContent = `Show Comments (${count})`;
+                } else {
+                    const count = commentsContainer.querySelectorAll('.comment-item').length;
+                    toggleBtn.textContent = `Hide Comments (${count})`;
                 }
             });
 
