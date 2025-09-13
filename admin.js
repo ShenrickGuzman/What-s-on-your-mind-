@@ -621,45 +621,40 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading(true);
         
         try {
-            const response = await fetch(`${API_BASE}/messages`, {
-                credentials: 'include'
-            });
+            // Fetch both private and public messages
+            const [privateRes, publicRes] = await Promise.all([
+                fetch(`${API_BASE}/messages`, { credentials: 'include' }),
+                fetch(`${API_BASE}/public-messages`, { credentials: 'include' })
+            ]);
             
-            console.log('Messages response status:', response.status);
-            console.log('Messages response headers:', response.headers);
-            
-            if (!response.ok) {
-                if (response.status === 401) {
-                    console.log('User not authenticated, redirecting to login');
+            // Check authentication and JSON for both
+            if (!privateRes.ok || !publicRes.ok) {
+                if (privateRes.status === 401 || publicRes.status === 401) {
+                    showToast('error', 'Please login again');
                     showLogin();
                     return;
                 }
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error('Failed to fetch messages');
             }
-            
-            // Check if response is JSON
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const textResponse = await response.text();
-                console.error('Non-JSON response received:', textResponse);
-                throw new Error('Server returned non-JSON response');
+            const privateContentType = privateRes.headers.get('content-type');
+            const publicContentType = publicRes.headers.get('content-type');
+            if (!privateContentType.includes('application/json') || !publicContentType.includes('application/json')) {
+                showToast('error', 'Server configuration error');
+                showLoading(false);
+                return;
             }
-            
-            allMessages = await response.json();
+            const privateMessages = await privateRes.json();
+            const publicMessages = await publicRes.json();
+            // Mark public messages for UI logic
+            publicMessages.forEach(m => m.is_public = true);
+            allMessages = [...privateMessages, ...publicMessages];
             console.log('Messages loaded successfully:', allMessages.length);
             updateStats();
             filterMessages();
             showLoading(false);
         } catch (error) {
             console.error('Error loading messages:', error);
-            if (error.message.includes('401')) {
-                showToast('error', 'Please login again');
-                showLogin();
-            } else if (error.message.includes('non-JSON')) {
-                showToast('error', 'Server configuration error');
-            } else {
-                showToast('error', 'Failed to load messages: ' + error.message);
-            }
+            showToast('error', 'Failed to load messages: ' + error.message);
             showLoading(false);
         }
     }
