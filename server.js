@@ -1,9 +1,4 @@
-const express = require('express');
-const { Pool } = require('pg');
-const session = require('express-session');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const path = require('path');
+// Delete a user account (admin only)
 app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
     const userId = req.params.id;
     if (!userId || isNaN(userId)) {
@@ -25,9 +20,9 @@ app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete user' });
     }
 });
+
 const express = require('express');
 const { Pool } = require('pg');
-
 const session = require('express-session');
 const cors = require('cors');
 const bodyParser = require('body-parser');
