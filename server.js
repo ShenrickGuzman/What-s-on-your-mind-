@@ -1013,8 +1013,8 @@ app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
         if (rowCount === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
-        // Also delete any signup_requests with the same gmail
-        await pool.query('DELETE FROM signup_requests WHERE gmail = $1', [gmail]);
+    // Also delete any signup_requests with the same gmail or username
+    await pool.query('DELETE FROM signup_requests WHERE gmail = $1 OR username = $2', [gmail, username]);
 
         // Invalidate session if possible (best effort, only for current session)
         // If the deleted user is currently logged in, destroy their session
