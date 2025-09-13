@@ -1,6 +1,8 @@
 // ...existing code...
+// Place the signup requests endpoints AFTER app is initialized (after 'const app = express();')
 // ...existing code...
-// Delete a user account (admin only)
+// ...existing code...
+// Delete a user account (admin only) -- placed after app, pool, and middleware are initialized
 app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
     const userId = req.params.id;
     if (!userId || isNaN(userId)) {
@@ -22,7 +24,6 @@ app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete user' });
     }
 });
-// Place the signup requests endpoints AFTER app is initialized (after 'const app = express();')
 // ...existing code...
 const express = require('express');
 const { Pool } = require('pg');
