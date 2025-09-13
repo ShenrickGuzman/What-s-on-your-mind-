@@ -1485,3 +1485,149 @@ body {
         left: 12px;
     }
 }
+
+/* --- Public Reactions & Comments Enhancements --- */
+.reactions-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px solid #edf2f7;
+}
+
+.reaction-btn {
+    background: #f7fafc;
+    border: 2px solid #e2e8f0;
+    color: #4a5568;
+    padding: 6px 14px;
+    border-radius: 25px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    line-height: 1;
+}
+.reaction-btn .reaction-count { min-width: 14px; display: inline-block; }
+.reaction-btn:hover {
+    background: #fff;
+    border-color: #cbd5e0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.reaction-btn:active {
+    transform: translateY(0);
+}
+.reaction-btn.reacted {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-color: #667eea;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
+}
+.reaction-btn.reacted .reaction-count { font-weight: 700; }
+
+.comments-section { margin-top: 18px; }
+.toggle-comments-btn {
+    background: #edf2f7;
+    border: 2px solid #e2e8f0;
+    color: #4a5568;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .25s ease;
+    letter-spacing: .5px;
+}
+.toggle-comments-btn:hover {
+    background: #fff;
+    border-color: #cbd5e0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+}
+.comments-container {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px 4px 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    max-height: 340px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.comments-container::-webkit-scrollbar { width: 8px; }
+.comments-container::-webkit-scrollbar-track { background: transparent; }
+.comments-container::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 4px; }
+.comment-item {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.comment-author { font-weight: 700; color: #4a5568; }
+.comment-text { color: #2d3748; }
+.no-comments { font-size: 0.8rem; color: #718096; font-style: italic; }
+
+.add-comment-form {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    padding: 14px 16px 16px 16px;
+    border-radius: 14px;
+}
+.add-comment-form textarea.comment-input {
+    resize: vertical;
+    min-height: 70px;
+    max-height: 160px;
+    padding: 10px 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    transition: border-color .2s, box-shadow .2s;
+}
+.add-comment-form textarea.comment-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.18);
+}
+.anon-label { font-size: 0.75rem; display: flex; align-items: center; gap: 6px; user-select: none; color: #4a5568; }
+.submit-comment-btn {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    color: #fff;
+    border: none;
+    padding: 8px 18px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-radius: 18px;
+    cursor: pointer;
+    letter-spacing: .5px;
+    transition: all .25s ease;
+}
+.submit-comment-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(56,161,105,0.35); }
+.submit-comment-btn:active { transform: translateY(0); }
+
+/* Small screen adjustments */
+@media (max-width: 600px) {
+  .reactions-bar { gap: 6px; }
+  .reaction-btn { padding: 6px 10px; font-size: 0.75rem; }
+  .toggle-comments-btn { width: 100%; text-align: center; }
+  .add-comment-form { padding: 12px; }
+}
