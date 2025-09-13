@@ -401,6 +401,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     // fallback: just use first user
                     currentUserInfo = users[0];
                 }
+                // Make currentUserInfo globally accessible for Reveal Poster logic
+                window.currentUserInfo = currentUserInfo;
                 isOwner = currentUserInfo && currentUserInfo.is_owner === 1;
                 updateUserDisplay();
             }
