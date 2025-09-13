@@ -88,6 +88,25 @@
 			<div id="messagesList" class="messages-list">
 				<!-- Messages will be populated here -->
 			</div>
+			<div id="messageTemplate" class="message-card hidden">
+				<!-- This hidden template is for cloning (not displayed directly) -->
+				<div class="message-header">
+					<span class="message-name"></span>
+					<span class="message-mood"></span>
+					<span class="message-date"></span>
+				</div>
+				<div class="message-text"></div>
+				<div class="reactions-bar"></div>
+				<div class="comments-section">
+					<button class="toggle-comments-btn">Show Comments (0)</button>
+					<div class="comments-container hidden"></div>
+					<form class="add-comment-form hidden">
+						<textarea class="comment-input" maxlength="500" placeholder="Add a comment..."></textarea>
+						<label class="anon-label"><input type="checkbox" class="comment-anon-checkbox" checked> Post anonymously</label>
+						<button type="submit" class="submit-comment-btn">Post</button>
+					</form>
+				</div>
+			</div>
 			<div id="loadingSpinner" class="loading-spinner hidden">
 				<div class="spinner"></div>
 				<p>Loading messages...</p>
