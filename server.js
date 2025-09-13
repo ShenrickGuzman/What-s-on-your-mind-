@@ -308,12 +308,33 @@ app.get('/api/public-messages', async (req, res) => {
         // Reveal poster info for SHEN if available (simulate: add a field to each message)
         let posterMap = {};
         if (isShen) {
-            // If you want to store poster info, you need to add a column to public_messages. For now, simulate with name/gmail if present.
-            // If name is 'Anonymous', try to find in users table by matching message/gmail if you store it.
-            // Here, just expose the name/gmail if present.
-            messages.forEach(m => {
-                posterMap[m.id] = { name: m.name, /* add more if you store more */ };
-            });
+            // For each message, if name is 'Anonymous', try to find the real user by matching message text and created_at to users table (if possible)
+            // Otherwise, show the name and gmail if available
+            for (const m of messages) {
+                let posterInfo = { name: m.name };
+                if (m.name === 'Anonymous') {
+                    // Try to find the real user by matching message and created_at (fuzzy)
+                    // Try to find a user who posted this message (if you store gmail or username)
+                    // Try to find a user who posted a message with the same text and time (within 1 minute)
+                    const { rows: userRows } = await pool.query(
+                        `SELECT gmail, username FROM users WHERE username IS NOT NULL AND gmail IS NOT NULL AND username <> '' AND gmail <> '' AND username IN (
+                            SELECT name FROM public_messages WHERE id = $1
+                        ) LIMIT 1`,
+                        [m.id]
+                    );
+                    if (userRows.length > 0) {
+                        posterInfo.gmail = userRows[0].gmail;
+                        posterInfo.name = userRows[0].username;
+                    }
+                } else {
+                    // Try to find gmail for non-anonymous
+                    const { rows: userRows } = await pool.query('SELECT gmail FROM users WHERE username = $1', [m.name]);
+                    if (userRows.length > 0) {
+                        posterInfo.gmail = userRows[0].gmail;
+                    }
+                }
+                posterMap[m.id] = posterInfo;
+            }
         }
         const reactionMap = {};
         reactionRows.forEach(r => {
