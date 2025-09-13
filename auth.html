@@ -19,9 +19,12 @@
             background: linear-gradient(120deg, #fbc2eb 0%, #a6c1ee 100%);
             font-family: 'Comic Neue', 'Fredoka One', cursive, sans-serif;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             overflow-x: hidden;
+            gap: 12px;
+            padding: 24px 0 32px 0;
         }
         .bubbles {
             position: fixed;
@@ -246,8 +249,8 @@
         .auth-footer {
             position: relative;
             z-index: 1;
-            margin-top: -10px;
-            margin-bottom: 40px;
+            margin-top: 4px;
+            margin-bottom: 0;
             text-align: center;
             font-family: 'Comic Neue', cursive, sans-serif;
             font-weight: 700;
@@ -259,6 +262,7 @@
             flex-direction: column;
             gap: 6px;
             align-items: center;
+            align-self: center;
         }
         .auth-footer .love { display:inline-flex; align-items:center; gap:4px; }
         .auth-footer .heart { animation: heartbeat 1.6s ease-in-out infinite; display:inline-block; }
