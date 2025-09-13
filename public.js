@@ -58,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             toggleBtn.textContent = `Hide Comments (${data.length})`;
-            form.classList.remove('hidden');
         } catch (err) {
             container.innerHTML = '<div class="error">Failed to load comments.</div>';
         }
@@ -159,6 +158,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label class="anon-label"><input type="checkbox" class="comment-anon-checkbox" checked> Post anonymously</label>
                 <button type="submit" class="submit-comment-btn">Post</button>
             `;
+            const addCommentToggle = document.createElement('button');
+            addCommentToggle.type = 'button';
+            addCommentToggle.className = 'add-comment-toggle-btn';
+            addCommentToggle.textContent = 'Add Comment';
+            addCommentToggle.setAttribute('aria-expanded', 'false');
+            addCommentToggle.addEventListener('click', () => {
+                const hidden = form.classList.contains('hidden');
+                form.classList.toggle('hidden');
+                addCommentToggle.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+                addCommentToggle.textContent = hidden ? 'Hide Comment Form' : 'Add Comment';
+                if (hidden) {
+                    form.querySelector('.comment-input').focus();
+                }
+            });
 
             let loaded = false;
             toggleBtn.addEventListener('click', async () => {
@@ -168,7 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     loaded = true;
                 }
                 commentsContainer.classList.toggle('hidden');
-                form.classList.toggle('hidden');
                 const expanded = !commentsContainer.classList.contains('hidden');
                 toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
                 if (!hidden) {
@@ -212,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             commentsSection.appendChild(toggleBtn);
             commentsSection.appendChild(commentsContainer);
+            commentsSection.appendChild(addCommentToggle);
             commentsSection.appendChild(form);
 
             card.appendChild(header);
