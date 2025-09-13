@@ -405,15 +405,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_BASE}/admin/users`, {
                 credentials: 'include'
             });
-            
             if (response.ok) {
                 const users = await response.json();
-                const currentUserData = users.find(user => user.id === currentUserInfo?.id);
-                if (currentUserData) {
-                    currentUserInfo = currentUserData;
-                    isOwner = currentUserData.is_owner === 1;
-                    updateUserDisplay();
+                // If currentUserInfo is not set, try to infer from session
+                if (!currentUserInfo || !currentUserInfo.username) {
+                    // Try to get the username from the first user with is_owner or just the first user
+                    const sessionUser = users.find(user => user.is_owner) || users[0];
+                    if (sessionUser) {
+                        currentUserInfo = sessionUser;
+                    }
+                } else {
+                    // Try to update info if id matches
+                    const currentUserData = users.find(user => user.id === currentUserInfo.id);
+                    if (currentUserData) {
+                        currentUserInfo = currentUserData;
+                    }
                 }
+                isOwner = currentUserInfo && currentUserInfo.is_owner === 1;
+                updateUserDisplay();
             }
         } catch (error) {
             console.error('Error loading user info:', error);
@@ -757,7 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // SHEN admin controls (delete/reveal)
         let shenControls = '';
-        if (currentUserInfo && currentUserInfo.username && currentUserInfo.username.toLowerCase() === 'shen') {
+    if (window.currentUserInfo && window.currentUserInfo.username && window.currentUserInfo.username.toLowerCase() === 'shen') {
             // Always show Reveal Poster button for SHEN
             const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
             const gmail = message._posterInfo && message._posterInfo.gmail ? message._posterInfo.gmail : '';
