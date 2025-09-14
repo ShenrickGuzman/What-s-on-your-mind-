@@ -229,35 +229,67 @@
             </div>
         </div>
 
-        <!-- Messages List -->
-        <div class="messages-section">
+        <!-- Private Messages Section -->
+        <div class="messages-section private-section">
             <div class="messages-header">
-                <h2>Recent Messages</h2>
+                <h2>🔒 Private Thoughts</h2>
                 <div class="sort-controls">
-                    <button id="sortNewest" class="sort-btn active" data-sort="newest">
+                    <button id="sortNewestPrivate" class="sort-btn active" data-sort="newest" data-type="private">
                         <i class="fas fa-clock"></i>
                         Newest First
                     </button>
-                    <button id="sortOldest" class="sort-btn" data-sort="oldest">
+                    <button id="sortOldestPrivate" class="sort-btn" data-sort="oldest" data-type="private">
                         <i class="fas fa-history"></i>
                         Oldest First
                     </button>
                 </div>
             </div>
             
-            <div id="messagesList" class="messages-list">
-                <!-- Messages will be populated here -->
+            <div id="privateMessagesList" class="messages-list">
+                <!-- Private messages will be populated here -->
             </div>
             
-            <div id="loadingSpinner" class="loading-spinner hidden">
+            <div id="loadingSpinnerPrivate" class="loading-spinner hidden">
                 <div class="spinner"></div>
-                <p>Loading messages...</p>
+                <p>Loading private messages...</p>
             </div>
             
-            <div id="noMessages" class="no-messages hidden">
-                <div class="no-messages-icon">📭</div>
-                <h3>No messages yet</h3>
-                <p>When people start sharing thoughts, they'll appear here!</p>
+            <div id="noPrivateMessages" class="no-messages hidden">
+                <div class="no-messages-icon">�</div>
+                <h3>No private messages yet</h3>
+                <p>Private thoughts will appear here!</p>
+            </div>
+        </div>
+
+        <!-- Public Messages Section -->
+        <div class="messages-section public-section">
+            <div class="messages-header">
+                <h2>🌐 Public Thoughts</h2>
+                <div class="sort-controls">
+                    <button id="sortNewestPublic" class="sort-btn active" data-sort="newest" data-type="public">
+                        <i class="fas fa-clock"></i>
+                        Newest First
+                    </button>
+                    <button id="sortOldestPublic" class="sort-btn" data-sort="oldest" data-type="public">
+                        <i class="fas fa-history"></i>
+                        Oldest First
+                    </button>
+                </div>
+            </div>
+            
+            <div id="publicMessagesList" class="messages-list">
+                <!-- Public messages will be populated here -->
+            </div>
+            
+            <div id="loadingSpinnerPublic" class="loading-spinner hidden">
+                <div class="spinner"></div>
+                <p>Loading public messages...</p>
+            </div>
+            
+            <div id="noPublicMessages" class="no-messages hidden">
+                <div class="no-messages-icon">🌐</div>
+                <h3>No public messages yet</h3>
+                <p>Public thoughts will appear here!</p>
             </div>
         </div>
     </div>
