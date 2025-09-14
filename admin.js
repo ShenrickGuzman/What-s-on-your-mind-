@@ -1,935 +1,1108 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // (Debug user display removed)
-    // --- Mood Emoji Helper ---
-    function getMoodEmoji(mood) {
-        const moodEmojis = {
-            'Happy': '😀',
-            'Curious': '🤔',
-            'Stressed': '😵‍💫',
-            'Excited': '🎉',
-            'In love': '😍',
-            'Sad': '😢',
-            'Bored': '🥱',
-            'Fine': '🙂'
-        };
-        return moodEmojis[mood] || '';
-    }
-    // --- Loading Spinner ---
-    window.showLoading = function(show) {
-        const spinner = document.getElementById('loadingSpinner');
-        if (spinner) {
-            spinner.classList.toggle('hidden', !show);
-        }
-    };
-    // --- Toast Notification ---
-    window.showToast = function(type, message) {
-        let toast = document.getElementById('toastNotification');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'toastNotification';
-            toast.style.position = 'fixed';
-            toast.style.bottom = '30px';
-            toast.style.left = '50%';
-            toast.style.transform = 'translateX(-50%)';
-            toast.style.zIndex = '9999';
-            toast.style.minWidth = '200px';
-            toast.style.padding = '16px 32px';
-            toast.style.borderRadius = '8px';
-            toast.style.fontSize = '1.1rem';
-            toast.style.color = '#fff';
-            toast.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-            toast.style.textAlign = 'center';
-            toast.style.display = 'none';
-            document.body.appendChild(toast);
-        }
-        toast.textContent = message;
-        toast.style.background = type === 'success' ? '#4caf50' : '#e74c3c';
-        toast.style.display = 'block';
-        clearTimeout(window._toastTimeout);
-        window._toastTimeout = setTimeout(() => {
-            toast.style.display = 'none';
-        }, 3000);
-    };
-    // All users section elements
-    const allUsersSection = document.getElementById('allUsersSection');
-    const allUsersList = document.getElementById('allUsersList');
-    const refreshAllUsersBtn = document.getElementById('refreshAllUsersBtn');
+// (delete-user route moved below after all middleware & helpers are defined)
 
-    // Load all users on dashboard show
-    function showDashboard() {
-        loginScreen.classList.add('hidden');
-        dashboard.classList.remove('hidden');
-        loadAllUsers();
-    }
+const express = require('express');
+const { Pool } = require('pg');
+const session = require('express-session');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const path = require('path');
+const bcrypt = require('bcryptjs');
 
-    // Fetch and display all users and their Gmail addresses
-    async function loadAllUsers() {
-        allUsersList.innerHTML = '<div style="text-align:center;">Loading...</div>';
-        try {
-            const res = await fetch(`${API_BASE}/admin/all-users`, { credentials: 'include' });
-            if (!res.ok) throw new Error('Failed to fetch users');
-            const users = await res.json();
-            if (Array.isArray(users) && users.length > 0) {
-                allUsersList.innerHTML = users.map(user => `
-                    <div class="all-user-card">
-                        <div><b>Username:</b> ${user.username}</div>
-                        <div><b>Gmail:</b> ${user.gmail}</div>
-                        <div>
-                            <button class="delete-user-btn" onclick="window.deleteUserAccount(${user.id}, '${user.username}')" ${currentUserInfo && user.username === currentUserInfo.username ? 'disabled' : ''}>
-                                <i class='fas fa-trash'></i> Delete
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                allUsersList.innerHTML = '<div style="text-align:center;">No users found.</div>';
-            }
-        } catch (err) {
-            allUsersList.innerHTML = '<div style="color:red;">Failed to load users.</div>';
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors({
+    origin: [
+        'http://localhost:5500', 
+        'http://127.0.0.1:5500', 
+        'http://localhost:3000',
+        'https://what-s-on-your-mind.onrender.com',
+        process.env.FRONTEND_URL,
+        // Allow any origin for admin panel access
+        /^https:\/\/.*\.onrender\.com$/,
+        /^https:\/\/.*\.vercel\.app$/,
+        /^https:\/\/.*\.netlify\.app$/
+    ].filter(Boolean),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname)));
+
+// Session configuration - Updated for production
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { 
+        secure: false, // Set to false for now to fix session issues
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'lax',
+        httpOnly: true
+    },
+    proxy: false, // Disable proxy trust for now
+    name: 'thoughts-website-session'
+}));
+
+// Database setup - PostgreSQL
+const connectionString = process.env.DATABASE_URL;
+const isRequireSsl = (process.env.PGSSLMODE || '').toLowerCase() === 'require';
+const pool = new Pool(
+    connectionString
+        ? {
+            connectionString,
+            ssl: isRequireSsl ? { rejectUnauthorized: false } : undefined
         }
+        : {
+            host: process.env.PGHOST || 'localhost',
+            port: parseInt(process.env.PGPORT || '5432', 10),
+            database: process.env.PGDATABASE || 'thoughts',
+            user: process.env.PGUSER || 'postgres',
+            password: process.env.PGPASSWORD || 'postgres',
+            ssl: isRequireSsl ? { rejectUnauthorized: false } : undefined
+        }
+);
+
+// All async initialization wrapped in IIFE for Node.js v24+ compatibility
+(async () => {
+    try {
+        const client = await pool.connect();
+        client.release();
+        console.log('Connected to PostgreSQL');
+        await createTables();
+        // Add columns if missing (for migration)
+        try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_username TEXT'); } catch (e) {}
+        try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_gmail TEXT'); } catch (e) {}
+    } catch (err) {
+        console.error('Error connecting to PostgreSQL:', err.message);
+        process.exit(1);
     }
 
-    // Delete user account (global for onclick)
-    window.deleteUserAccount = async function(userId, username) {
-        if (!confirm(`Are you sure you want to delete user '${username}'? This action cannot be undone.`)) return;
-        try {
-            const delRes = await fetch(`${API_BASE}/admin/delete-user/${userId}`, {
-                method: 'DELETE',
-                credentials: 'include'
-            });
-            const result = await delRes.json();
-            if (result.success) {
-                showToast('success', `User '${username}' deleted successfully! 🗑️`);
-                loadAllUsers();
-            } else {
-                showToast('error', result.error || 'Failed to delete user');
-            }
-        } catch (err) {
-            showToast('error', 'Failed to delete user');
-        }
-    }
+async function createTables() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS messages (
+            id SERIAL PRIMARY KEY,
+            message TEXT NOT NULL,
+            name TEXT,
+            mood TEXT NOT NULL,
+            timestamp TIMESTAMPTZ DEFAULT NOW(),
+            is_pinned BOOLEAN DEFAULT FALSE
+        )
+    `);
+    console.log('Messages table ready');
 
-    // Refresh button for all users
-    if (refreshAllUsersBtn) {
-        refreshAllUsersBtn.addEventListener('click', loadAllUsers);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS admin_users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_owner BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    console.log('Admin users table ready');
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS public_messages (
+            id SERIAL PRIMARY KEY,
+            name TEXT,
+            mood TEXT,
+            message TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            real_username TEXT,
+            real_gmail TEXT
+        )
+    `);
+    // Add columns if missing (for migration)
+    try { await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_username TEXT'); } catch (e) {}
+    try { await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_gmail TEXT'); } catch (e) {}
+    console.log('Public messages table ready');
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            gmail TEXT UNIQUE NOT NULL
+        )
+    `);
+    console.log('Users table ready');
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS verified_gmails (
+            gmail TEXT PRIMARY KEY
+        )
+    `);
+    console.log('Verified gmails table ready');
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            token TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL
+        )
+    `);
+    console.log('Password reset tokens table ready');
+
+    // New: Public message comments
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS public_message_comments (
+            id SERIAL PRIMARY KEY,
+            public_message_id INTEGER REFERENCES public_messages(id) ON DELETE CASCADE,
+            username TEXT,
+            is_anonymous BOOLEAN DEFAULT FALSE,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_public_message_comments_msg_id ON public_message_comments(public_message_id)`);
+    console.log('Public message comments table ready');
+
+    // New: Public message reactions
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS public_message_reactions (
+            id SERIAL PRIMARY KEY,
+            public_message_id INTEGER REFERENCES public_messages(id) ON DELETE CASCADE,
+            username TEXT,
+            is_anonymous BOOLEAN DEFAULT FALSE,
+            reaction_type TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_public_message_reactions_msg_id ON public_message_reactions(public_message_id)`);
+    // Ensure a non-partial unique index for ON CONFLICT inference (NULL usernames allow duplicates for anonymous)
+    try {
+        // Drop old partial index if it exists (previous migration attempt)
+        await pool.query('DROP INDEX IF EXISTS uniq_public_reaction_user');
+    } catch (e) {
+        console.warn('Could not drop old partial index uniq_public_reaction_user:', e.message);
     }
-    // Use the current domain for API calls
-    const API_BASE = window.location.origin + '/api';
-    
-    // DOM elements
-    const loginScreen = document.getElementById('loginScreen');
-    const dashboard = document.getElementById('dashboard');
-    const loginForm = document.getElementById('loginForm');
-    const signupForm = document.getElementById('signupForm');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const refreshBtn = document.getElementById('refreshBtn');
-    const searchInput = document.getElementById('searchInput');
-    const moodFilter = document.getElementById('moodFilter');
-    const pinFilter = document.getElementById('pinFilter');
-    const sortNewest = document.getElementById('sortNewest');
-    const sortOldest = document.getElementById('sortOldest');
-    const messagesList = document.getElementById('messagesList');
-    const loadingSpinner = document.getElementById('loadingSpinner');
-    const noMessages = document.getElementById('noMessages');
-    
-    // Auth toggle elements
-    const showSignupBtn = document.getElementById('showSignupBtn');
-    const showLoginBtn = document.getElementById('showLoginBtn');
-    const authSubtitle = document.getElementById('authSubtitle');
-    
-    // Admin management elements
-    const adminManagementSection = document.getElementById('adminManagementSection');
-    const addAdminBtn = document.getElementById('addAdminBtn');
-    const addAdminModal = document.getElementById('addAdminModal');
-    const closeAddAdminModal = document.getElementById('closeAddAdminModal');
-    const cancelAddAdmin = document.getElementById('cancelAddAdmin');
-    const confirmAddAdmin = document.getElementById('confirmAddAdmin');
-    const addAdminForm = document.getElementById('addAdminForm');
-    const adminUsersList = document.getElementById('adminUsersList');
-    
-    // User info elements
-    const currentUser = document.getElementById('currentUser');
-    const userRole = document.getElementById('userRole');
-    
-    // Stats elements
-    const totalMessages = document.getElementById('totalMessages');
-    const pinnedMessages = document.getElementById('pinnedMessages');
-    const happyMoods = document.getElementById('happyMoods');
-    const curiousMoods = document.getElementById('curiousMoods');
-    
-    let allMessages = [];
-    let filteredMessages = [];
-    let currentSort = 'newest';
-    let currentUserInfo = null;
-    let isOwner = false;
-    
-    // Check authentication status on load
-    checkAuthStatus();
-    
-    // Event listeners
-    loginForm.addEventListener('submit', handleLogin);
-    signupForm.addEventListener('submit', handleSignup);
-    showSignupBtn.addEventListener('click', showSignupForm);
-    showLoginBtn.addEventListener('click', showLoginForm);
-    logoutBtn.addEventListener('click', handleLogout);
-    refreshBtn.addEventListener('click', loadMessages);
-    searchInput.addEventListener('input', filterMessages);
-    moodFilter.addEventListener('change', filterMessages);
-    pinFilter.addEventListener('change', filterMessages);
-    sortNewest.addEventListener('click', () => setSort('newest'));
-    sortOldest.addEventListener('click', () => setSort('oldest'));
-    
-    // Admin management event listeners
-    addAdminBtn.addEventListener('click', () => addAdminModal.classList.remove('hidden'));
-    closeAddAdminModal.addEventListener('click', () => addAdminModal.classList.add('hidden'));
-    cancelAddAdmin.addEventListener('click', () => addAdminModal.classList.add('hidden'));
-    confirmAddAdmin.addEventListener('click', handleAddAdmin);
-    
-    // Close modal when clicking outside
-    addAdminModal.addEventListener('click', (e) => {
-        if (e.target === addAdminModal) {
-            addAdminModal.classList.add('hidden');
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_public_reaction_user_full ON public_message_reactions(public_message_id, username, reaction_type)`);
+    console.log('Public message reactions table & indexes ready');
+
+    await createDefaultAdmin();
+}
+
+async function createDefaultAdmin() {
+    const defaultUsername = process.env.ADMIN_USERNAME || 'admin';
+    const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123'; // Change this in production!
+    try {
+        const { rows } = await pool.query('SELECT id FROM admin_users WHERE username = $1', [defaultUsername]);
+        if (rows.length === 0) {
+            const hash = await new Promise((resolve, reject) =>
+                bcrypt.hash(defaultPassword, 10, (err, h) => (err ? reject(err) : resolve(h)))
+            );
+            await pool.query('INSERT INTO admin_users (username, password_hash, is_owner) VALUES ($1, $2, $3)', [defaultUsername, hash, true]);
+            console.log(`Default owner user created - Username: ${defaultUsername}, Password: ${defaultPassword}`);
+            console.log('⚠️  IMPORTANT: Change these credentials in production!');
         }
+    } catch (err) {
+        console.error('Error ensuring default admin user:', err.message);
+    }
+}
+
+// Authentication middleware
+function requireAuth(req, res, next) {
+    console.log('Auth check - Session:', req.session);
+    console.log('Auth check - Authenticated:', req.session.authenticated);
+    
+    if (req.session.authenticated) {
+        console.log('User authenticated, proceeding...');
+        next();
+    } else {
+        console.log('User not authenticated, access denied');
+        res.status(401).json({ error: 'Authentication required' });
+    }
+}
+
+// Test route to verify server is working
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        message: 'Server is working!', 
+        timestamp: new Date().toISOString(),
+        sessionId: req.sessionID,
+        authenticated: !!req.session.authenticated
     });
-    
-    // --- Signup Requests Modal Logic ---
-    const viewSignupRequestsBtn = document.getElementById('viewSignupRequestsBtn');
-    const signupRequestsModal = document.getElementById('signupRequestsModal');
-    const closeSignupRequestsModal = document.getElementById('closeSignupRequestsModal');
-    const signupRequestsList = document.getElementById('signupRequestsList');
-    const signupRequestsBtnText = document.getElementById('signupRequestsBtnText');
+});
 
-    // Toggle state
-    let signupRequestsVisible = false;
+// Routes
 
-    function toggleSignupRequests() {
-        signupRequestsVisible = !signupRequestsVisible;
-        if (signupRequestsVisible) {
-            loadSignupRequests();
-            signupRequestsModal.classList.remove('hidden');
-            signupRequestsBtnText.textContent = '✖ Close sign up requests';
-        } else {
-            signupRequestsModal.classList.add('hidden');
-            signupRequestsBtnText.textContent = 'Click to view sign up request';
-        }
+// Store a new message
+app.post('/api/messages', (req, res) => {
+    const { message, name, mood } = req.body;
+    if (!message || !mood) {
+        return res.status(400).json({ error: 'Message and mood are required' });
     }
+    // Store real account info if logged in
+    let real_username = null, real_gmail = null;
+    if (req.session.user && req.session.user.username) {
+        real_username = req.session.user.username;
+        real_gmail = req.session.user.gmail || null;
+    }
+    const sql = 'INSERT INTO messages (message, name, mood, real_username, real_gmail) VALUES ($1, $2, $3, $4, $5) RETURNING id';
+    pool.query(sql, [message, name || 'Anonymous', mood, real_username, real_gmail])
+        .then((result) => {
+            res.json({ success: true, messageId: result.rows[0].id, message: 'Message stored successfully' });
+        })
+        .catch((err) => {
+            console.error('Error storing message:', err.message);
+            res.status(500).json({ error: 'Failed to store message' });
+        });
+});
 
-    viewSignupRequestsBtn.addEventListener('click', toggleSignupRequests);
-    closeSignupRequestsModal.addEventListener('click', toggleSignupRequests);
-    signupRequestsModal.addEventListener('click', (e) => {
-        if (e.target === signupRequestsModal) {
-            toggleSignupRequests();
-        }
-    });
+// Store a new public message
+app.post('/api/public-messages', (req, res) => {
+    const { message, name, mood } = req.body;
+    if (!message) {
+        return res.status(400).json({ error: 'Message is required' });
+    }
+    // Store real account info if logged in
+    let real_username = null, real_gmail = null;
+    if (req.session.user && req.session.user.username) {
+        real_username = req.session.user.username;
+        real_gmail = req.session.user.gmail || null;
+    }
+    const sql = 'INSERT INTO public_messages (message, name, mood, real_username, real_gmail) VALUES ($1, $2, $3, $4, $5) RETURNING id';
+    pool.query(sql, [message, name || 'Anonymous', mood || '', real_username, real_gmail])
+        .then((result) => {
+            res.json({ success: true, messageId: result.rows[0].id });
+        })
+        .catch((err) => {
+            console.error('Error storing public message:', err.message);
+            res.status(500).json({ error: 'Failed to store public message' });
+        });
+});
 
-    async function loadSignupRequests() {
-        signupRequestsList.innerHTML = '<div style="text-align:center;">Loading...</div>';
-        try {
-            const res = await fetch(`${API_BASE}/auth/signup-requests`, { credentials: 'include' });
-            const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-                signupRequestsList.innerHTML = data.map(req => `
-                    <div class="signup-request-card">
-                        <div><b>Username:</b> ${req.username}</div>
-                        <div><b>Gmail:</b> ${req.gmail}</div>
-                        <div><b>Status:</b> ${req.status}</div>
-                        <div class="signup-request-actions">
-                            <button onclick="window.approveSignupRequest(${req.id})" class="approve-btn">Approve</button>
-                            <button onclick="window.declineSignupRequest(${req.id})" class="decline-btn">Decline</button>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                signupRequestsList.innerHTML = '<div style="text-align:center;">No pending requests.</div>';
-            }
-        } catch (err) {
-            signupRequestsList.innerHTML = '<div style="color:red;">Failed to load requests.</div>';
-        }
-    }
-
-    window.approveSignupRequest = async function(id) {
-        if (!confirm('Approve this sign up request?')) return;
-        await fetch(`${API_BASE}/auth/signup-requests/${id}/approve`, { method: 'POST', credentials: 'include' });
-        await loadSignupRequests();
-        showToast('success', 'Request approved!');
-    };
-    window.declineSignupRequest = async function(id) {
-        if (!confirm('Decline this sign up request?')) return;
-        await fetch(`${API_BASE}/auth/signup-requests/${id}/decline`, { method: 'POST', credentials: 'include' });
-        await loadSignupRequests();
-        showToast('success', 'Request declined.');
-    };
-
-    // Auth toggle functions
-    function showSignupForm() {
-        loginForm.classList.add('hidden');
-        signupForm.classList.remove('hidden');
-        showSignupBtn.classList.add('hidden');
-        showLoginBtn.classList.remove('hidden');
-        authSubtitle.textContent = 'Create a new admin account';
-    }
+// Get all messages (admin only) - Updated to handle pinned messages
+app.get('/api/messages', requireAuth, (req, res) => {
+    console.log('Messages endpoint accessed by user:', req.session.userId);
+    console.log('Session authenticated:', req.session.authenticated);
     
-    function showLoginForm() {
-        signupForm.classList.add('hidden');
-        loginForm.classList.remove('hidden');
-        showLoginBtn.classList.add('hidden');
-        showSignupBtn.classList.remove('hidden');
-        authSubtitle.textContent = 'Enter your credentials to view messages';
-    }
-    
-    // Authentication functions
-    async function checkAuthStatus() {
-        try {
-            const response = await fetch(`${API_BASE}/admin/status`, {
-                credentials: 'include'
-            });
-            const data = await response.json();
-            
-            if (data.authenticated) {
-                await loadUserInfo();
-                showDashboard();
-                loadMessages();
-                if (isOwner) {
-                    loadAdminUsers();
-                }
-            } else {
-                showLogin();
-            }
-        } catch (error) {
-            console.error('Error checking auth status:', error);
-            showLogin();
-        }
-    }
-    
-    // Signup function
-    async function handleSignup(e) {
-        e.preventDefault();
-        
-        const formData = new FormData(signupForm);
-        const username = formData.get('username');
-        const password = formData.get('password');
-        const inviteCode = formData.get('inviteCode');
-        
-        if (!username || !password || !inviteCode) {
-            showToast('error', 'Please fill in all fields');
-            return;
-        }
-        
-        if (username.length < 3) {
-            showToast('error', 'Username must be at least 3 characters long');
-            return;
-        }
-        
-        if (password.length < 6) {
-            showToast('error', 'Password must be at least 6 characters long');
-            return;
-        }
-        
-        try {
-            const response = await fetch(`${API_BASE}/admin/self-register`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password, inviteCode })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                showToast('success', 'Account created successfully! Logging you in... 🎉');
-                
-                // Automatically log in the new user
-                await autoLogin(username, password);
-            } else {
-                showToast('error', data.error || 'Failed to create account');
-            }
-        } catch (error) {
-            console.error('Error creating account:', error);
-            showToast('error', 'Failed to create account. Please try again.');
-        }
-    }
-    
-    // Auto-login after signup
-    async function autoLogin(username, password) {
-        try {
-            const response = await fetch(`${API_BASE}/admin/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ username, password })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                showToast('success', 'Welcome! You are now logged in! 🎉');
-                await loadUserInfo();
-                showDashboard();
-                loadMessages();
-                if (isOwner) {
-                    loadAdminUsers();
-                }
-            } else {
-                showToast('error', 'Account created but login failed. Please try logging in manually.');
-                showLoginForm();
-            }
-        } catch (error) {
-            console.error('Auto-login error:', error);
-            showToast('error', 'Account created but login failed. Please try logging in manually.');
-            showLoginForm();
-        }
-    }
-    
-    async function loadUserInfo() {
-        try {
-            // First, get the current admin's userId from status endpoint
-            const statusRes = await fetch(`${API_BASE}/admin/status`, { credentials: 'include' });
-            const statusData = await statusRes.json();
-            let userId = statusData.userId;
-            // Now get all admin users
-            const usersRes = await fetch(`${API_BASE}/admin/users`, { credentials: 'include' });
-            if (usersRes.ok) {
-                const users = await usersRes.json();
-                // Find the current user by id
-                const currentUserData = users.find(user => user.id === userId);
-                if (currentUserData) {
-                    currentUserInfo = currentUserData;
-                } else {
-                    // fallback: just use first user
-                    currentUserInfo = users[0];
-                }
-                // Make currentUserInfo globally accessible for Reveal Poster logic
-                window.currentUserInfo = currentUserInfo;
-                isOwner = currentUserInfo && currentUserInfo.is_owner === 1;
-                updateUserDisplay();
-            }
-        } catch (error) {
-            console.error('Error loading user info:', error);
-        }
-    }
-    
-    function updateUserDisplay() {
-        if (currentUserInfo) {
-            currentUser.textContent = `👤 ${currentUserInfo.username}`;
-            userRole.textContent = isOwner ? '👑 Owner' : '👤 Admin';
-            
-            // Show/hide admin management section
-            if (isOwner) {
-                adminManagementSection.classList.remove('hidden');
-            } else {
-                adminManagementSection.classList.add('hidden');
-            }
-        }
-    }
-    
-    async function handleLogin(e) {
-        e.preventDefault();
-        
-        const formData = new FormData(loginForm);
-        const username = formData.get('username');
-        const password = formData.get('password');
-        
-        try {
-            const response = await fetch(`${API_BASE}/admin/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ username, password })
-            });
-            
-            // Check if response is JSON
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const textResponse = await response.text();
-                console.error('Non-JSON response received:', textResponse);
-                throw new Error('Server returned non-JSON response. Check server logs.');
-            }
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                showToast('success', 'Login successful! 🎉');
-                await loadUserInfo();
-                showDashboard();
-                loadMessages();
-                if (isOwner) {
-                    loadAdminUsers();
-                }
-            } else {
-                showToast('error', data.error || 'Login failed');
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            if (error.message.includes('non-JSON')) {
-                showToast('error', 'Server error - check server configuration');
-            } else {
-                showToast('error', 'Login failed. Please try again.');
-            }
-        }
-    }
-    
-    async function handleLogout() {
-        try {
-            const response = await fetch(`${API_BASE}/admin/logout`, {
-                method: 'POST',
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                showToast('success', 'Logged out successfully! 👋');
-                currentUserInfo = null;
-                isOwner = false;
-                showLogin();
-            }
-        } catch (error) {
-            console.error('Logout error:', error);
-        }
-    }
-    
-    // Admin management functions
-    async function handleAddAdmin() {
-        const formData = new FormData(addAdminForm);
-        const username = formData.get('username');
-        const password = formData.get('password');
-        
-        if (!username || !password) {
-            showToast('error', 'Please fill in all fields');
-            return;
-        }
-        
-        if (password.length < 6) {
-            showToast('error', 'Password must be at least 6 characters long');
-            return;
-        }
-        
-        try {
-            const response = await fetch(`${API_BASE}/admin/register`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ username, password })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                showToast('success', `Admin user "${username}" created successfully! 👤`);
-                addAdminModal.classList.add('hidden');
-                addAdminForm.reset();
-                loadAdminUsers();
-            } else {
-                showToast('error', data.error || 'Failed to create admin user');
-            }
-        } catch (error) {
-            console.error('Error creating admin user:', error);
-            showToast('error', 'Failed to create admin user');
-        }
-    }
-    
-    async function loadAdminUsers() {
-        if (!isOwner) return;
-        
-        try {
-            const response = await fetch(`${API_BASE}/admin/users`, {
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                const users = await response.json();
-                displayAdminUsers(users);
-            }
-        } catch (error) {
-            console.error('Error loading admin users:', error);
-        }
-    }
-    
-    function displayAdminUsers(users) {
-        const usersHTML = users.map(user => `
-            <div class="admin-user-card ${user.is_owner ? 'owner' : 'regular-admin'}">
-                <div class="admin-user-info">
-                    <div class="admin-user-avatar">${user.is_owner ? '👑' : '👤'}</div>
-                    <div class="admin-user-details">
-                        <h4>${user.username}</h4>
-                        <span class="admin-user-role">${user.is_owner ? 'Owner' : 'Admin'}</span>
-                        <small>Created: ${new Date(user.created_at).toLocaleDateString()}</small>
-                    </div>
-                </div>
-                <div class="admin-user-actions">
-                    ${!user.is_owner && user.id !== currentUserInfo?.id ? 
-                        `<button class="delete-admin-btn" onclick="deleteAdminUser(${user.id}, '${user.username}')" title="Delete admin user">
-                            <i class="fas fa-trash"></i>
-                        </button>` : ''
+    const sql = 'SELECT * FROM messages ORDER BY is_pinned DESC, timestamp DESC';
+    pool.query(sql)
+        .then(async ({ rows }) => {
+            console.log(`Successfully fetched ${rows.length} messages`);
+            // If admin is SHEN, add _posterInfo for each message (if possible)
+            const isShen = req.session.user && req.session.user.username && req.session.user.username.toLowerCase() === 'shen';
+            let enriched = rows;
+            if (isShen) {
+                // Always include _posterInfo, even if empty
+                enriched = await Promise.all(rows.map(async m => {
+                    let posterInfo = {};
+                    // Prefer real_username/real_gmail if present
+                    if (m.real_username || m.real_gmail) {
+                        posterInfo = { name: m.real_username || '', gmail: m.real_gmail || '' };
+                    } else if (m.name && m.name !== 'Anonymous') {
+                        // Fallback: try to look up by name
+                        const { rows: users } = await pool.query('SELECT username, gmail FROM users WHERE username = $1', [m.name]);
+                        if (users.length > 0) {
+                            posterInfo = { name: users[0].username, gmail: users[0].gmail };
+                        }
                     }
-                </div>
-            </div>
-        `).join('');
-        
-        adminUsersList.innerHTML = usersHTML;
-    }
-    
-    // Pin message functions
-    async function togglePinMessage(messageId, isPinned) {
-        try {
-            const response = await fetch(`${API_BASE}/messages/${messageId}/pin`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ isPinned: !isPinned })
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    showToast('success', `Message ${!isPinned ? 'pinned' : 'unpinned'} successfully! 📌`);
-                    loadMessages();
-                }
-            } else {
-                const errorData = await response.json();
-                showToast('error', errorData.error || 'Failed to update pin status');
+                    // Always attach _posterInfo, even if empty
+                    return { ...m, _posterInfo: posterInfo };
+                }));
             }
-        } catch (error) {
-            console.error('Error toggling pin status:', error);
-            showToast('error', 'Failed to update pin status');
-        }
-    }
-    
-    // UI functions
-    function showLogin() {
-        loginScreen.classList.remove('hidden');
-        dashboard.classList.add('hidden');
-        loginForm.reset();
-        currentUserInfo = null;
-        isOwner = false;
-    }
-    
-    function showDashboard() {
-        loginScreen.classList.add('hidden');
-        dashboard.classList.remove('hidden');
-    }
-    
-    // Message loading and display
-    async function loadMessages() {
-        showLoading(true);
-        
-        try {
-            // Fetch both private and public messages
-            const [privateRes, publicRes] = await Promise.all([
-                fetch(`${API_BASE}/messages`, { credentials: 'include' }),
-                fetch(`${API_BASE}/public-messages`, { credentials: 'include' })
-            ]);
-            
-            // Check authentication and JSON for both
-            if (!privateRes.ok || !publicRes.ok) {
-                if (privateRes.status === 401 || publicRes.status === 401) {
-                    showToast('error', 'Please login again');
-                    showLogin();
-                    return;
-                }
-                throw new Error('Failed to fetch messages');
-            }
-            const privateContentType = privateRes.headers.get('content-type');
-            const publicContentType = publicRes.headers.get('content-type');
-            if (!privateContentType.includes('application/json') || !publicContentType.includes('application/json')) {
-                showToast('error', 'Server configuration error');
-                showLoading(false);
-                return;
-            }
-            const privateMessages = await privateRes.json();
-            const publicMessages = await publicRes.json();
-            // Mark public messages for UI logic
-            publicMessages.forEach(m => m.is_public = true);
-            allMessages = [...privateMessages, ...publicMessages];
-            console.log('Messages loaded successfully:', allMessages.length);
-            updateStats();
-            filterMessages();
-            showLoading(false);
-        } catch (error) {
-            console.error('Error loading messages:', error);
-            showToast('error', 'Failed to load messages: ' + error.message);
-            showLoading(false);
-        }
-    }
-    
-    // Normalize pin flag from backend (handles boolean true/false and numeric 1/0)
-    function isPinnedFlag(message) {
-        const v = message && message.is_pinned;
-        return v === true || v === 1 || v === '1' || v === 't' || v === 'true';
-    }
-
-    function updateStats() {
-        const total = allMessages.length;
-        const pinned = allMessages.filter(m => isPinnedFlag(m)).length;
-        const happy = allMessages.filter(m => m.mood === 'Happy').length;
-        const curious = allMessages.filter(m => m.mood === 'Curious').length;
-        
-        totalMessages.textContent = total;
-        pinnedMessages.textContent = pinned;
-        happyMoods.textContent = happy;
-        curiousMoods.textContent = curious;
-    }
-    
-    function filterMessages() {
-        const searchTerm = searchInput.value.toLowerCase();
-        const selectedMood = moodFilter.value;
-        const selectedPinStatus = pinFilter.value;
-        
-        filteredMessages = allMessages.filter(message => {
-            const matchesSearch = message.message.toLowerCase().includes(searchTerm) ||
-                                (message.name && message.name.toLowerCase().includes(searchTerm));
-            const matchesMood = !selectedMood || message.mood === selectedMood;
-            const pinned = isPinnedFlag(message);
-            const matchesPinStatus = !selectedPinStatus || 
-                                   (selectedPinStatus === 'pinned' && pinned) ||
-                                   (selectedPinStatus === 'unpinned' && !pinned);
-            
-            return matchesSearch && matchesMood && matchesPinStatus;
+            res.json(enriched);
+        })
+        .catch((err) => {
+            console.error('Error fetching messages:', err.message);
+            res.status(500).json({ error: 'Failed to fetch messages', details: err.message });
         });
-        
-        displayMessages();
-    }
-    
-    function setSort(sortType) {
-        currentSort = sortType;
-        
-        // Update button states
-        sortNewest.classList.toggle('active', sortType === 'newest');
-        sortOldest.classList.toggle('active', sortType === 'oldest');
-        
-        displayMessages();
-    }
-    
-    function displayMessages() {
-        if (filteredMessages.length === 0) {
-            messagesList.innerHTML = '';
-            noMessages.classList.remove('hidden');
-            return;
-        }
-        
-        noMessages.classList.add('hidden');
-        
-        // Sort messages - pinned first, then by timestamp
-        const sortedMessages = [...filteredMessages].sort((a, b) => {
-            // First sort by pin status
-            const aPinned = isPinnedFlag(a) ? 1 : 0;
-            const bPinned = isPinnedFlag(b) ? 1 : 0;
-            if (aPinned !== bPinned) {
-                return bPinned - aPinned;
-            }
-            
-            // Then sort by timestamp
-            const dateA = new Date(a.timestamp);
-            const dateB = new Date(b.timestamp);
-            return currentSort === 'newest' ? dateB - dateA : dateA - dateB;
-        });
-        
-        // Create message cards
-        const messagesHTML = sortedMessages.map(message => createMessageCard(message)).join('');
-        messagesList.innerHTML = messagesHTML;
-    }
-    
-    function createMessageCard(message) {
-        const timestamp = new Date(message.timestamp).toLocaleString();
-        const moodEmoji = getMoodEmoji(message.mood);
-        const isPinned = isPinnedFlag(message);
+});
 
-        // SHEN admin controls (delete/reveal)
-        let shenControls = '';
-        console.log('DEBUG: currentUserInfo', window.currentUserInfo);
-        console.log('DEBUG: message._posterInfo', message._posterInfo);
-        if (window.currentUserInfo && window.currentUserInfo.username && window.currentUserInfo.username.toLowerCase() === 'shen') {
-            // Always show Reveal Poster button for SHEN (for all messages)
-            const name = message._posterInfo && message._posterInfo.name ? message._posterInfo.name : '';
-            const gmail = message._posterInfo && message._posterInfo.gmail ? message._posterInfo.gmail : '';
-            shenControls += `<button class="shen-reveal-btn" type="button" onclick="window.toggleRevealPoster(this, '${name}', '${gmail}')">👁 Reveal Poster</button> <span class="shen-poster-info"></span>`;
-            // Delete button (for public messages only)
-            if (message.is_public) {
-                shenControls += `<button class="shen-delete-btn" type="button" onclick="window.deletePublicMessage(${message.id}, this)">🗑 Delete</button>`;
+// Get all public messages
+app.get('/api/public-messages', async (req, res) => {
+    try {
+        const { rows: messages } = await pool.query('SELECT * FROM public_messages ORDER BY created_at DESC LIMIT 100');
+        if (messages.length === 0) return res.json([]);
+        const ids = messages.map(m => m.id);
+        // Reaction counts
+        const { rows: reactionRows } = await pool.query(`
+            SELECT public_message_id, reaction_type, COUNT(*)::int AS count
+            FROM public_message_reactions
+            WHERE public_message_id = ANY($1)
+            GROUP BY public_message_id, reaction_type
+        `, [ids]);
+        // Comment counts
+        const { rows: commentRows } = await pool.query(`
+            SELECT public_message_id, COUNT(*)::int AS count
+            FROM public_message_comments
+            WHERE public_message_id = ANY($1)
+            GROUP BY public_message_id
+        `, [ids]);
+        // User reactions (if logged in)
+        let userReactionRows = [];
+        const isShen = req.session.user && req.session.user.username && req.session.user.username.toLowerCase() === 'shen';
+        if (req.session.user && req.session.user.username) {
+            const { rows } = await pool.query(`
+                SELECT public_message_id, reaction_type
+                FROM public_message_reactions
+                WHERE public_message_id = ANY($1) AND username = $2
+            `, [ids, req.session.user.username]);
+            userReactionRows = rows;
+        }
+        // Reveal poster info for SHEN if available (simulate: add a field to each message)
+        let posterMap = {};
+        if (isShen) {
+            for (const m of messages) {
+                // For SHEN, always show real_username and real_gmail if present, even if not the current user
+                let posterInfo = {};
+                if (m.real_gmail) posterInfo.gmail = m.real_gmail;
+                if (m.real_username) posterInfo.name = m.real_username;
+                // If no info, still provide empty object
+                posterMap[m.id] = posterInfo;
             }
         }
-
-        return `
-            <div class="message-card ${isPinned ? 'pinned' : ''}" data-id="${message.id}">
-                <div class="message-header">
-                    <div class="message-meta">
-                        <span class="message-name">${message.name}</span>
-                        <span class="message-mood">${moodEmoji} ${message.mood}</span>
-                        ${isPinned ? '<span class="pin-indicator">📌 Pinned</span>' : ''}
-                    </div>
-                    <div class="message-actions">
-                        <span class="message-timestamp">${timestamp}</span>
-                        <button class="pin-btn ${isPinned ? 'pinned' : ''}" onclick="togglePinMessage(${message.id}, ${isPinned})" title="${isPinned ? 'Unpin message' : 'Pin message'}">
-                            <i class="fas fa-thumbtack"></i>
-                        </button>
-                        <button class="delete-btn" onclick="deleteMessage(${message.id})" title="Delete message">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                        ${shenControls ? `<div class="shen-controls">${shenControls}</div>` : ''}
-                    </div>
-                </div>
-                <div class="message-text">${message.message}</div>
-            </div>
-        `;
-    }
-
-    // SHEN reveal/hide logic
-    window.toggleRevealPoster = function(btn, name) {
-        const infoSpan = btn.nextElementSibling;
-        const gmail = arguments[2] || '';
-        if (btn.textContent.includes('Reveal')) {
-            let info = '';
-            if (gmail) {
-                info = `Gmail: ${gmail}`;
-            } else if (name) {
-                info = `Name: ${name}`;
-            } else {
-                info = 'Unknown';
-            }
-            infoSpan.textContent = info;
-            btn.textContent = '🙈 Hide Poster';
-        } else {
-            infoSpan.textContent = '';
-            btn.textContent = '👁 Reveal Poster';
-        }
-    };
-
-    // SHEN delete public message logic
-    window.deletePublicMessage = async function(id, btn) {
-        if (!confirm('Delete this public message?')) return;
-        try {
-            const res = await fetch(`/api/public-messages/${id}`, { method: 'DELETE', credentials: 'include' });
-            const data = await res.json();
-            if (data.success) {
-                // Remove card from DOM
-                btn.closest('.message-card').remove();
-            } else {
-                alert(data.error || 'Delete failed');
-            }
-        } catch (err) {
-            alert('Delete failed');
-        }
-    };
-    
-    // Delete message function (global scope for onclick)
-    window.deleteMessage = async function(messageId) {
-        // Store the message ID for deletion
-        window.pendingDeleteId = messageId;
-        
-        // Show the delete confirmation modal
-        const deleteModal = document.getElementById('deleteModal');
-        deleteModal.classList.remove('hidden');
-        
-        // Add event listeners for modal buttons
-        const cancelBtn = document.getElementById('cancelDelete');
-        const confirmBtn = document.getElementById('confirmDelete');
-        
-        // Remove existing listeners to prevent duplicates
-        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
-        
-        // Get fresh references
-        const newCancelBtn = document.getElementById('cancelDelete');
-        const newConfirmBtn = document.getElementById('confirmDelete');
-        
-        // Add new listeners
-        newCancelBtn.addEventListener('click', () => {
-            deleteModal.classList.add('hidden');
-            window.pendingDeleteId = null;
+        const reactionMap = {};
+        reactionRows.forEach(r => {
+            if (!reactionMap[r.public_message_id]) reactionMap[r.public_message_id] = {};
+            reactionMap[r.public_message_id][r.reaction_type] = r.count;
         });
-        
-        newConfirmBtn.addEventListener('click', async () => {
-            await performDelete(window.pendingDeleteId);
-            deleteModal.classList.add('hidden');
-            window.pendingDeleteId = null;
+        const commentCountMap = {};
+        commentRows.forEach(c => { commentCountMap[c.public_message_id] = c.count; });
+        const userReactionMap = {};
+        userReactionRows.forEach(ur => {
+            if (!userReactionMap[ur.public_message_id]) userReactionMap[ur.public_message_id] = [];
+            userReactionMap[ur.public_message_id].push(ur.reaction_type);
         });
-        
-        // Close modal when clicking outside
-        deleteModal.addEventListener('click', (e) => {
-            if (e.target === deleteModal) {
-                deleteModal.classList.add('hidden');
-                window.pendingDeleteId = null;
+        const enriched = messages.map(m => {
+            const base = {
+                ...m,
+                reactionCounts: reactionMap[m.id] || {},
+                commentCount: commentCountMap[m.id] || 0,
+                userReactions: userReactionMap[m.id] || []
+            };
+            if (isShen) {
+                // For SHEN, always include _posterInfo with real account info if available
+                base._posterInfo = posterMap[m.id] || {};
             }
+            return base;
         });
-        
-        // Close modal with Escape key
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') {
-                deleteModal.classList.add('hidden');
-                window.pendingDeleteId = null;
-                document.removeEventListener('keydown', handleEscape);
-            }
-        };
-        document.addEventListener('keydown', handleEscape);
-    };
-    
-    // Delete admin user function (global scope for onclick)
-    window.deleteAdminUser = async function(userId, username) {
-        if (!confirm(`Are you sure you want to delete admin user "${username}"? This action cannot be undone.`)) {
-            return;
-        }
-        
-        try {
-            const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
-                method: 'DELETE',
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success) {
-                    showToast('success', `Admin user "${username}" deleted successfully! 🗑️`);
-                    loadAdminUsers();
-                } else {
-                    showToast('error', result.error || 'Failed to delete admin user');
-                }
-            } else {
-                const errorData = await response.json();
-                showToast('error', errorData.error || 'Failed to delete admin user');
-            }
-        } catch (error) {
-            console.error('Error deleting admin user:', error);
-            showToast('error', 'Failed to delete admin user');
-        }
-    };
-    
-    // Perform the actual deletion
-    async function performDelete(messageId) {
-        try {
-            const response = await fetch(`${API_BASE}/messages/${messageId}`, {
-                method: 'DELETE',
-                credentials: 'include'
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                showToast('success', 'Message deleted successfully! 🗑️');
-                
-                // Remove message from local arrays
-                allMessages = allMessages.filter(m => m.id !== messageId);
-                filteredMessages = filteredMessages.filter(m => m.id !== messageId);
-                
-                // Update stats and display
-                updateStats();
-                displayMessages();
-            } else {
-                showToast('error', result.error || 'Failed to delete message');
-            }
-        } catch (error) {
-            console.error('Error deleting message:', error);
-            showToast('error', 'Failed to delete message: ' + error.message);
-        }
+        res.json(enriched);
+    } catch (err) {
+        console.error('Error fetching public messages:', err.message);
+        res.status(500).json({ error: 'Failed to fetch public messages' });
     }
 });
+// Allow SHEN to delete any public message
+app.delete('/api/public-messages/:id', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    const isShen = req.session.user && req.session.user.username && req.session.user.username.toLowerCase() === 'shen';
+    if (!isShen) return res.status(403).json({ error: 'Only SHEN can delete public messages via this endpoint.' });
+    try {
+        const { rowCount } = await pool.query('DELETE FROM public_messages WHERE id = $1', [id]);
+        if (rowCount === 0) return res.status(404).json({ error: 'Message not found' });
+        res.json({ success: true, message: 'Message deleted successfully', deletedId: id });
+    } catch (err) {
+        console.error('Error deleting public message:', err.message);
+        res.status(500).json({ error: 'Failed to delete public message' });
+    }
+});
+
+// --- Public Message Comments Endpoints ---
+const MAX_COMMENT_LENGTH = 500;
+function sanitizeTrim(text) {
+    if (typeof text !== 'string') return '';
+    return text.trim();
+}
+
+app.get('/api/public-messages/:id/comments', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    try {
+        const { rows } = await pool.query(`
+            SELECT id, public_message_id, username, is_anonymous, comment, created_at
+            FROM public_message_comments
+            WHERE public_message_id = $1
+            ORDER BY created_at ASC
+        `, [id]);
+        res.json(rows.map(r => ({
+            ...r,
+            displayName: r.is_anonymous || !r.username ? 'Anonymous' : r.username
+        })));
+    } catch (err) {
+        console.error('Error fetching comments:', err.message);
+        res.status(500).json({ error: 'Failed to fetch comments' });
+    }
+});
+
+app.post('/api/public-messages/:id/comments', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    const { comment, anonymous } = req.body;
+    const cleaned = sanitizeTrim(comment);
+    if (!cleaned) return res.status(400).json({ error: 'Comment required' });
+    if (cleaned.length > MAX_COMMENT_LENGTH) return res.status(400).json({ error: `Comment too long (max ${MAX_COMMENT_LENGTH})` });
+    const username = req.session.user && req.session.user.username ? req.session.user.username : null;
+    const isAnon = anonymous || !username;
+    try {
+        const { rows } = await pool.query(`
+            INSERT INTO public_message_comments (public_message_id, username, is_anonymous, comment)
+            VALUES ($1, $2, $3, $4) RETURNING id, created_at
+        `, [id, isAnon ? null : username, isAnon, cleaned]);
+        res.json({ success: true, comment: { id: rows[0].id, public_message_id: id, comment: cleaned, created_at: rows[0].created_at, username: isAnon ? null : username, is_anonymous: isAnon, displayName: isAnon ? 'Anonymous' : username } });
+    } catch (err) {
+        console.error('Error adding comment:', err.message);
+        res.status(500).json({ error: 'Failed to add comment' });
+    }
+});
+
+app.delete('/api/public-messages/:id/comments/:commentId', async (req, res) => {
+    const messageId = parseInt(req.params.id, 10);
+    const commentId = parseInt(req.params.commentId, 10);
+    if (isNaN(messageId) || isNaN(commentId)) return res.status(400).json({ error: 'Invalid ids' });
+    try {
+        const { rows } = await pool.query('SELECT username FROM public_message_comments WHERE id = $1 AND public_message_id = $2', [commentId, messageId]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Comment not found' });
+        const comment = rows[0];
+        const sessionUsername = req.session.user && req.session.user.username;
+        const isAdmin = !!req.session.authenticated; // admin session flag
+        if (!(isAdmin || (sessionUsername && comment.username && sessionUsername === comment.username))) {
+            return res.status(403).json({ error: 'Not authorized to delete this comment' });
+        }
+        await pool.query('DELETE FROM public_message_comments WHERE id = $1', [commentId]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error deleting comment:', err.message);
+        res.status(500).json({ error: 'Failed to delete comment' });
+    }
+});
+
+// --- Public Message Reactions Endpoints ---
+const ALLOWED_REACTIONS = ['like', 'heart', 'laugh', 'wow', 'sad'];
+app.post('/api/public-messages/:id/react', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid message id' });
+    const { type } = req.body;
+    if (!ALLOWED_REACTIONS.includes(type)) return res.status(400).json({ error: 'Invalid reaction type' });
+    const username = req.session.user && req.session.user.username ? req.session.user.username : null;
+    // For anonymous, use session to limit per session per reaction
+    if (!req.session.reacted) req.session.reacted = {};
+    if (!req.session.reacted[id]) req.session.reacted[id] = {};
+    if (username) {
+        // Toggle behavior for logged-in user (enforced by unique index)
+        try {
+            // If client requested remove explicitly
+            if (req.body.remove) {
+                await pool.query('DELETE FROM public_message_reactions WHERE public_message_id = $1 AND username = $2 AND reaction_type = $3', [id, username, type]);
+            } else {
+                // Insert if not exists
+                await pool.query(`
+                    INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
+                    VALUES ($1, $2, false, $3)
+                    ON CONFLICT (public_message_id, username, reaction_type) DO NOTHING
+                `, [id, username, type]);
+            }
+        } catch (err) {
+            console.error('Reaction toggle error (logged-in):', err.message);
+            return res.status(500).json({ error: 'Failed to react' });
+        }
+    } else {
+        // Anonymous: allow only one reaction per type per message per session
+        try {
+            if (req.session.reacted[id][type]) {
+                // Already reacted in this session
+                return res.status(429).json({ error: 'You have already reacted to this message with this reaction.' });
+            }
+            await pool.query(`
+                INSERT INTO public_message_reactions (public_message_id, username, is_anonymous, reaction_type)
+                VALUES ($1, NULL, true, $2)
+            `, [id, type]);
+            req.session.reacted[id][type] = true;
+        } catch (err) {
+            console.error('Reaction add error (anonymous):', err.message);
+            return res.status(500).json({ error: 'Failed to react' });
+        }
+    }
+    // Return updated counts and userReactions
+    try {
+        const { rows: counts } = await pool.query(`
+            SELECT reaction_type, COUNT(*)::int AS count
+            FROM public_message_reactions
+            WHERE public_message_id = $1
+            GROUP BY reaction_type
+        `, [id]);
+        const reactionCounts = {};
+        counts.forEach(c => { reactionCounts[c.reaction_type] = c.count; });
+        let userReactions = [];
+        if (username) {
+            const { rows } = await pool.query('SELECT reaction_type FROM public_message_reactions WHERE public_message_id = $1 AND username = $2', [id, username]);
+            userReactions = rows.map(r => r.reaction_type);
+        } else {
+            // For anonymous, reflect session state
+            userReactions = Object.keys(req.session.reacted[id]);
+        }
+        res.json({ success: true, reactionCounts, userReactions });
+    } catch (err) {
+        console.error('Error returning reaction counts:', err.message);
+        res.status(500).json({ error: 'Failed to fetch reaction counts' });
+    }
+});
+
+// Delete a message (admin only)
+app.delete('/api/messages/:id', requireAuth, (req, res) => {
+    const messageId = req.params.id;
+    
+    if (!messageId || isNaN(messageId)) {
+        return res.status(400).json({ error: 'Invalid message ID' });
+    }
+    
+    const sql = 'DELETE FROM messages WHERE id = $1';
+    pool.query(sql, [messageId])
+        .then((result) => {
+            if (result.rowCount === 0) {
+                res.status(404).json({ error: 'Message not found' });
+            } else {
+                console.log(`Message ${messageId} deleted successfully`);
+                res.json({ success: true, message: 'Message deleted successfully', deletedId: messageId });
+            }
+        })
+        .catch((err) => {
+            console.error('Error deleting message:', err.message);
+            res.status(500).json({ error: 'Failed to delete message' });
+        });
+});
+
+// Pin/Unpin a message (admin only)
+app.put('/api/messages/:id/pin', requireAuth, (req, res) => {
+    const messageId = req.params.id;
+    const { isPinned } = req.body;
+    
+    if (!messageId || isNaN(messageId)) {
+        return res.status(400).json({ error: 'Invalid message ID' });
+    }
+    
+    if (typeof isPinned !== 'boolean') {
+        return res.status(400).json({ error: 'isPinned must be a boolean' });
+    }
+    
+    const sql = 'UPDATE messages SET is_pinned = $1 WHERE id = $2';
+    pool.query(sql, [isPinned, messageId])
+        .then((result) => {
+            if (result.rowCount === 0) {
+                res.status(404).json({ error: 'Message not found' });
+            } else {
+                console.log(`Message ${messageId} ${isPinned ? 'pinned' : 'unpinned'} successfully`);
+                res.json({ success: true, message: `Message ${isPinned ? 'pinned' : 'unpinned'} successfully`, messageId, isPinned });
+            }
+        })
+        .catch((err) => {
+            console.error('Error updating message pin status:', err.message);
+            res.status(500).json({ error: 'Failed to update message pin status' });
+        });
+});
+
+// Admin login
+app.post('/api/admin/login', (req, res) => {
+    console.log('Login attempt received:', { 
+        username: req.body.username, 
+        hasPassword: !!req.body.password,
+        sessionId: req.sessionID 
+    });
+    
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        console.log('Login failed: Missing credentials');
+        return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    pool.query('SELECT * FROM admin_users WHERE username = $1', [username])
+        .then(({ rows }) => {
+            const user = rows[0];
+            if (!user) {
+                console.log('Login failed: User not found:', username);
+                res.status(401).json({ error: 'Invalid credentials' });
+                return;
+            }
+            console.log('User found, checking password...');
+            bcrypt.compare(password, user.password_hash, (err, isMatch) => {
+                if (err) {
+                    console.error('Password comparison error:', err.message);
+                    res.status(500).json({ error: 'Login failed - password error' });
+                } else if (isMatch) {
+                    console.log('Password match! Setting session for user:', user.id);
+                    req.session.authenticated = true;
+                    req.session.userId = user.id;
+                    console.log('Session after login:', req.session);
+                    res.json({ success: true, message: 'Login successful' });
+                } else {
+                    console.log('Login failed: Password mismatch for user:', username);
+                    res.status(401).json({ error: 'Invalid credentials' });
+                }
+            });
+        })
+        .catch((err) => {
+            console.error('Database error during login:', err.message);
+            res.status(500).json({ error: 'Login failed - database error' });
+        });
+});
+
+// Admin logout
+app.post('/api/admin/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            res.status(500).json({ error: 'Logout failed' });
+        } else {
+            res.json({ success: true, message: 'Logout successful' });
+        }
+    });
+});
+
+// Check authentication status
+app.get('/api/admin/status', (req, res) => {
+    res.json({ 
+        authenticated: !!req.session.authenticated,
+        userId: req.session.userId 
+    });
+});
+
+// Admin registration (super admin only)
+app.post('/api/admin/register', requireAuth, (req, res) => {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    // Check if current user is super admin
+    pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [req.session.userId])
+        .then(({ rows }) => {
+            const user = rows[0];
+            if (!user || !user.is_owner) {
+                res.status(403).json({ error: 'Only owners can create new accounts' });
+                return null;
+            }
+            return pool.query('SELECT id FROM admin_users WHERE username = $1', [username]);
+        })
+        .then((result) => {
+            if (!result) return; // response already sent
+            if (result.rows.length > 0) {
+                res.status(409).json({ error: 'Username already exists' });
+                return null;
+            }
+            return new Promise((resolve, reject) => {
+                bcrypt.hash(password, 10, async (err, hash) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        await pool.query('INSERT INTO admin_users (username, password_hash, is_owner) VALUES ($1, $2, $3)', [username, hash, false]);
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            });
+        })
+        .then(() => {
+            res.json({ success: true, message: 'Admin user created successfully', username });
+        })
+        .catch((err) => {
+            if (!res.headersSent) {
+                console.error('Error creating admin user:', err.message);
+                res.status(500).json({ error: 'Failed to create user' });
+            }
+        });
+});
+
+// Self-registration for admin accounts (no auth required, but with security controls)
+app.post('/api/admin/self-register', (req, res) => {
+    const { username, password, inviteCode } = req.body;
+    
+    if (!username || !password || !inviteCode) {
+        return res.status(400).json({ error: 'Username, password, and invite code are required' });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    if (username.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters long' });
+    }
+    
+    // Check if invite code is valid (you can customize this)
+    const validInviteCode = process.env.ADMIN_INVITE_CODE || 'ADMIN2024';
+    if (inviteCode !== validInviteCode) {
+        return res.status(403).json({ error: 'Invalid invite code' });
+    }
+    
+    // Check if username already exists
+    pool.query('SELECT id FROM admin_users WHERE username = $1', [username])
+        .then(({ rows }) => {
+            if (rows.length > 0) {
+                res.status(409).json({ error: 'Username already exists' });
+                return null;
+            }
+            return new Promise((resolve, reject) => {
+                bcrypt.hash(password, 10, async (err, hash) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        await pool.query('INSERT INTO admin_users (username, password_hash, is_owner) VALUES ($1, $2, $3)', [username, hash, false]);
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            });
+        })
+        .then(() => {
+            res.json({ success: true, message: 'Admin account created successfully! You can now login.', username });
+        })
+        .catch((err) => {
+            if (!res.headersSent) {
+                console.error('Error during self-registration:', err.message);
+                res.status(500).json({ error: 'Failed to create user' });
+            }
+        });
+});
+
+// Get admin users list (super admin only)
+app.get('/api/admin/users', requireAuth, (req, res) => {
+    pool.query('SELECT id, username, is_owner, created_at FROM admin_users ORDER BY created_at DESC')
+        .then((result) => {
+            res.json(result.rows);
+        })
+        .catch((err) => {
+            console.error('Error fetching admin users:', err.message);
+            res.status(500).json({ error: 'Failed to fetch admin users' });
+        });
+});
+
+// Delete admin user (super admin only)
+app.delete('/api/admin/users/:id', requireAuth, async (req, res) => {
+    const userId = req.params.id;
+    if (!userId || isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    try {
+        // Check if current user is super admin
+        const { rows: currentRows } = await pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [req.session.userId]);
+        const currentUser = currentRows[0];
+        if (!currentUser || !currentUser.is_owner) {
+            return res.status(403).json({ error: 'Only owners can delete users' });
+        }
+        if (parseInt(userId) === req.session.userId) {
+            return res.status(400).json({ error: 'Cannot delete your own account' });
+        }
+        // Check target user
+        const { rows: targetRows } = await pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [userId]);
+        const targetUser = targetRows[0];
+        if (!targetUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        if (targetUser.is_owner) {
+            return res.status(403).json({ error: 'Cannot delete owner accounts' });
+        }
+        const result = await pool.query('DELETE FROM admin_users WHERE id = $1', [userId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        console.log(`Admin user ${userId} deleted successfully`);
+        res.json({ success: true, message: 'Admin user deleted successfully', deletedId: userId });
+    } catch (err) {
+        console.error('Error deleting admin user:', err.message);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
+// Serve admin page
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Authentication routes
+
+const bcrypt = require('bcryptjs');
+
+// --- User Auth System ---
+const crypto = require('crypto');
+
+// Ensure users, signup_requests, and verified_gmails tables exist
+pool.query(`
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    gmail TEXT UNIQUE NOT NULL
+);
+CREATE TABLE IF NOT EXISTS signup_requests (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    gmail TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS verified_gmails (
+    gmail TEXT PRIMARY KEY
+);
+`).catch(console.error);
+
+// Signup endpoint (approval system)
+// Forgot password: request reset
+app.post('/api/auth/forgot-password', async (req, res) => {
+    const { gmail } = req.body;
+    if (!gmail) return res.status(400).json({ error: 'Gmail is required' });
+    const { rows } = await pool.query('SELECT id FROM users WHERE gmail = $1', [gmail]);
+    if (rows.length === 0) return res.status(404).json({ error: 'No user found with that Gmail' });
+    const userId = rows[0].id;
+    // Generate token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 min expiry
+    await pool.query('INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)', [userId, token, expiresAt]);
+    // Log reset link (simulate email)
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5500'}/auth.html?resetToken=${token}`;
+    console.log(`[RESET] Password reset link for user ${gmail}: ${resetLink}`);
+    res.json({ success: true, message: 'If your Gmail is registered, a reset link has been sent.' });
+});
+
+// Reset password with token
+app.post('/api/auth/reset-password', async (req, res) => {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token and new password required' });
+    // Find token
+    const { rows } = await pool.query('SELECT * FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW()', [token]);
+    if (rows.length === 0) return res.status(400).json({ error: 'Invalid or expired token' });
+    const reset = rows[0];
+    // Update user password
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, reset.user_id]);
+    // Delete all tokens for this user
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [reset.user_id]);
+    res.json({ success: true, message: 'Password has been reset. You can now log in.' });
+});
+app.post('/api/auth/signup', async (req, res) => {
+    const { username, password, gmail } = req.body;
+    if (!username || !password || !gmail) return res.status(400).json({ error: 'All fields required' });
+
+    // Check if username or gmail already exists in users
+    const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [username, gmail]);
+    if (userExists.rows.length > 0) return res.status(409).json({ error: 'User or Gmail already exists' });
+    // Remove declined requests for this username or gmail
+    await pool.query('DELETE FROM signup_requests WHERE (username = $1 OR gmail = $2) AND status = $3', [username, gmail, 'declined']);
+    // Check if a pending request exists
+    const pendingExists = await pool.query('SELECT id FROM signup_requests WHERE (username = $1 OR gmail = $2) AND status = $3', [username, gmail, 'pending']);
+    if (pendingExists.rows.length > 0) return res.status(409).json({ error: 'A sign up request for this username or gmail is already pending approval.' });
+
+    const hash = await bcrypt.hash(password, 10);
+    console.log(`[DEBUG] Signup password hash for ${username}:`, hash);
+    await pool.query('INSERT INTO signup_requests (username, password_hash, gmail, status) VALUES ($1, $2, $3, $4)', [username, hash, gmail, 'pending']);
+    res.json({ success: true, message: 'Sign up request sent, wait for the admin to approve it.' });
+});
+
+// Signin endpoint
+app.post('/api/auth/signin', async (req, res) => {
+    const { username, password } = req.body;
+    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    const user = rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    req.session.user = { username: user.username, gmail: user.gmail };
+    res.json({ success: true });
+});
+
+// Auth status
+app.get('/api/auth/status', (req, res) => {
+    res.json({ authenticated: !!req.session.user });
+});
+
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy(() => res.json({ success: true }));
+});
+
+// Protect index.html
+app.get('/index.html', (req, res, next) => {
+    if (!req.session.user) return res.redirect('/auth.html');
+    next();
+});
+
+// View all pending signup requests (admin only)
+// List all users and their Gmail (admin only)
+app.get('/api/admin/all-users', requireAuth, async (req, res) => {
+    try {
+        const { rows } = await pool.query('SELECT id, username, gmail FROM users ORDER BY id ASC');
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching all users:', err.message);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
+app.get('/api/auth/signup-requests', requireAuth, async (req, res) => {
+    try {
+        const { rows } = await pool.query('SELECT * FROM signup_requests WHERE status = $1 ORDER BY created_at ASC', ['pending']);
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching signup requests:', err.message);
+        res.status(500).json({ error: 'Failed to fetch signup requests' });
+    }
+});
+
+// Approve signup request (admin only)
+app.post('/api/auth/signup-requests/:id/approve', requireAuth, async (req, res) => {
+    const id = req.params.id;
+    try {
+        // Get the signup request
+        const { rows } = await pool.query('SELECT * FROM signup_requests WHERE id = $1 AND status = $2', [id, 'pending']);
+        if (rows.length === 0) return res.status(404).json({ error: 'Signup request not found or already processed' });
+        const request = rows[0];
+        // Check if username or gmail already exists in users
+        const userExists = await pool.query('SELECT id FROM users WHERE username = $1 OR gmail = $2', [request.username, request.gmail]);
+        if (userExists.rows.length > 0) {
+            // Mark as declined if already exists
+            await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['declined', id]);
+            return res.status(409).json({ error: 'User or Gmail already exists. Request declined.' });
+        }
+        // Debug: print hash being inserted
+        console.log(`[DEBUG] Approving signup for ${request.username}, hash:`, request.password_hash);
+        // Insert into users
+        await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [request.username, request.password_hash, request.gmail]);
+        // Mark request as approved
+        await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2', ['approved', id]);
+        res.json({ success: true, message: 'Signup request approved and user created.' });
+    } catch (err) {
+        console.error('Error approving signup request:', err.message);
+        res.status(500).json({ error: 'Failed to approve signup request' });
+    }
+// --- Fix: Remove users with broken hashes (not bcrypt hashes) so they can re-sign up ---
+async function cleanBrokenUserHashes() {
+    try {
+        const { rows } = await pool.query('SELECT id, username, password_hash FROM users');
+        for (const user of rows) {
+            // bcrypt hashes start with $2
+            if (!user.password_hash.startsWith('$2')) {
+                console.log(`[CLEANUP] Removing user with broken hash: ${user.username}`);
+                await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
+            }
+        }
+    } catch (err) {
+        console.error('Error cleaning up broken user hashes:', err.message);
+    }
+}
+cleanBrokenUserHashes();
+});
+
+// Decline signup request (admin only)
+app.post('/api/auth/signup-requests/:id/decline', requireAuth, async (req, res) => {
+    const id = req.params.id;
+    try {
+        const { rowCount } = await pool.query('UPDATE signup_requests SET status = $1 WHERE id = $2 AND status = $3', ['declined', id, 'pending']);
+        if (rowCount === 0) return res.status(404).json({ error: 'Signup request not found or already processed' });
+        res.json({ success: true, message: 'Signup request declined.' });
+    } catch (err) {
+        console.error('Error declining signup request:', err.message);
+        res.status(500).json({ error: 'Failed to decline signup request' });
+    }
+});
+
+// Delete a user account (admin only) - placed AFTER app, middleware, and tables creation
+app.delete('/api/admin/delete-user/:id', requireAuth, async (req, res) => {
+    const userId = req.params.id;
+    if (!userId || isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    try {
+        // Optional safety: prevent deleting own admin-linked user account if mapped
+        if (req.session.user && req.session.user.id == userId) {
+            return res.status(400).json({ error: 'You cannot delete your own account from here.' });
+        }
+        // Get the user's gmail and username before deleting
+        const { rows: userRows } = await pool.query('SELECT gmail, username FROM users WHERE id = $1', [userId]);
+        if (userRows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const gmail = userRows[0].gmail;
+        const username = userRows[0].username;
+
+        // Delete all public messages by this user (real_username or name)
+        await pool.query('DELETE FROM public_messages WHERE real_username = $1 OR name = $1', [username]);
+        // Delete all public message comments by this user
+        await pool.query('DELETE FROM public_message_comments WHERE username = $1', [username]);
+        // Delete all public message reactions by this user
+        await pool.query('DELETE FROM public_message_reactions WHERE username = $1', [username]);
+
+        // Delete the user
+        const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+        if (rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+    // Also delete any signup_requests with the same gmail or username
+    await pool.query('DELETE FROM signup_requests WHERE gmail = $1 OR username = $2', [gmail, username]);
+
+        // Invalidate session if possible (best effort, only for current session)
+        // If the deleted user is currently logged in, destroy their session
+        if (req.session.user && req.session.user.username === username) {
+            req.session.destroy(() => {});
+        }
+
+        res.json({ success: true, message: 'User and all related data deleted successfully', deletedId: userId });
+    } catch (err) {
+        console.error('Error deleting user:', err.message);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
+// --- MIGRATION: Fill real_username and real_gmail for old public messages ---
+async function migratePublicMessagesRealAccountInfo() {
+    try {
+        // Ensure columns exist before running migration
+        await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_username TEXT');
+        await pool.query('ALTER TABLE public_messages ADD COLUMN IF NOT EXISTS real_gmail TEXT');
+        // For each public message where real_username is null and name is not null or 'Anonymous'
+        const { rows: messages } = await pool.query("SELECT id, name FROM public_messages WHERE (real_username IS NULL OR real_gmail IS NULL) AND name IS NOT NULL AND name <> 'Anonymous'");
+        for (const msg of messages) {
+            const trimmedName = msg.name.trim();
+            // Try username match (case-insensitive)
+            let { rows: users } = await pool.query('SELECT username, gmail FROM users WHERE LOWER(username) = LOWER($1)', [trimmedName]);
+            if (users.length === 0 && trimmedName.includes('@')) {
+                // Try gmail match if name looks like an email
+                users = await pool.query('SELECT username, gmail FROM users WHERE LOWER(gmail) = LOWER($1)', [trimmedName]);
+                users = users.rows;
+            }
+            if (users.length > 0) {
+                await pool.query('UPDATE public_messages SET real_username = $1, real_gmail = $2 WHERE id = $3', [users[0].username, users[0].gmail, msg.id]);
+            }
+        }
+        console.log('Migration complete: real_username and real_gmail filled for all public messages with matching users (by username or gmail).');
+    } catch (err) {
+        console.error('Migration error:', err.message);
+    }
+}
+// Run migration on startup
+    await migratePublicMessagesRealAccountInfo();
+
+    // Start server
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Admin panel available at: http://localhost:${PORT}/admin`);
+        console.log(`Default admin credentials: admin / admin123`);
+    });
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+    try {
+        await pool.end();
+        console.log('Database connection pool closed');
+    } catch (err) {
+        console.error('Error closing database pool:', err.message);
+    }
+    process.exit(0);
+});
+})();
