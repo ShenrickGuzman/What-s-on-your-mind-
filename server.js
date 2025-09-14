@@ -6,7 +6,7 @@ const session = require('express-session');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
