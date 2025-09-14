@@ -150,11 +150,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchInput');
     const moodFilter = document.getElementById('moodFilter');
     const pinFilter = document.getElementById('pinFilter');
-    const messagesList = document.getElementById('messagesList');
+    
+    // Separate message lists
+    const privateMessagesList = document.getElementById('privateMessagesList');
+    const publicMessagesList = document.getElementById('publicMessagesList');
     const refreshBtn = document.getElementById('refreshBtn');
-    const noMessages = document.getElementById('noMessages');
-    const sortNewest = document.getElementById('sortNewest');
-    const sortOldest = document.getElementById('sortOldest');
+    
+    // No messages elements
+    const noPrivateMessages = document.getElementById('noPrivateMessages');
+    const noPublicMessages = document.getElementById('noPublicMessages');
+    
+    // Sort buttons for private messages
+    const sortNewestPrivate = document.getElementById('sortNewestPrivate');
+    const sortOldestPrivate = document.getElementById('sortOldestPrivate');
+    
+    // Sort buttons for public messages
+    const sortNewestPublic = document.getElementById('sortNewestPublic');
+    const sortOldestPublic = document.getElementById('sortOldestPublic');
 
     // Admin management elements
     const adminManagementSection = document.getElementById('adminManagementSection');
@@ -179,9 +191,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const curiousMoods = document.getElementById('curiousMoods');
 
     // State variables
-    let allMessages = [];
-    let filteredMessages = [];
-    let currentSort = 'newest';
+    let allPrivateMessages = [];
+    let allPublicMessages = [];
+    let filteredPrivateMessages = [];
+    let filteredPublicMessages = [];
+    let currentSortPrivate = 'newest';
+    let currentSortPublic = 'newest';
     let currentUserInfo = null;
     let isOwner = false;
 
@@ -195,8 +210,14 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('input', filterMessages);
     moodFilter.addEventListener('change', filterMessages);
     pinFilter.addEventListener('change', filterMessages);
-    sortNewest.addEventListener('click', () => setSort('newest'));
-    sortOldest.addEventListener('click', () => setSort('oldest'));
+    
+    // Sort event listeners for private messages
+    sortNewestPrivate.addEventListener('click', () => setSort('newest', 'private'));
+    sortOldestPrivate.addEventListener('click', () => setSort('oldest', 'private'));
+    
+    // Sort event listeners for public messages
+    sortNewestPublic.addEventListener('click', () => setSort('newest', 'public'));
+    sortOldestPublic.addEventListener('click', () => setSort('oldest', 'public'));
 
     // Admin management event listeners
     addAdminBtn.addEventListener('click', () => addAdminModal.classList.remove('hidden'));
@@ -532,12 +553,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 showLoading(false);
                 return;
             }
-            const privateMessages = await privateRes.json();
-            const publicMessages = await publicRes.json();
-            // Mark public messages for UI logic
-            publicMessages.forEach(m => m.is_public = true);
-            allMessages = [...privateMessages, ...publicMessages];
-            console.log('Messages loaded successfully:', allMessages.length);
+            
+            allPrivateMessages = await privateRes.json();
+            allPublicMessages = await publicRes.json();
+            
+            console.log('Private messages loaded:', allPrivateMessages.length);
+            console.log('Public messages loaded:', allPublicMessages.length);
+            
             updateStats();
             filterMessages();
             showLoading(false);
@@ -555,6 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
+        const allMessages = [...allPrivateMessages, ...allPublicMessages];
         const total = allMessages.length;
         const pinned = allMessages.filter(m => isPinnedFlag(m)).length;
         const happy = allMessages.filter(m => m.mood === 'Happy').length;
@@ -571,7 +594,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedMood = moodFilter.value;
         const selectedPinStatus = pinFilter.value;
         
-        filteredMessages = allMessages.filter(message => {
+        // Filter private messages
+        filteredPrivateMessages = allPrivateMessages.filter(message => {
+            const matchesSearch = message.message.toLowerCase().includes(searchTerm) ||
+                                (message.name && message.name.toLowerCase().includes(searchTerm));
+            const matchesMood = !selectedMood || message.mood === selectedMood;
+            const pinned = isPinnedFlag(message);
+            const matchesPinStatus = !selectedPinStatus || 
+                                   (selectedPinStatus === 'pinned' && pinned) ||
+                                   (selectedPinStatus === 'unpinned' && !pinned);
+            
+            return matchesSearch && matchesMood && matchesPinStatus;
+        });
+        
+        // Filter public messages
+        filteredPublicMessages = allPublicMessages.filter(message => {
             const matchesSearch = message.message.toLowerCase().includes(searchTerm) ||
                                 (message.name && message.name.toLowerCase().includes(searchTerm));
             const matchesMood = !selectedMood || message.mood === selectedMood;
@@ -586,27 +623,38 @@ document.addEventListener('DOMContentLoaded', () => {
         displayMessages();
     }
     
-    function setSort(sortType) {
-        currentSort = sortType;
-        
-        // Update button states
-        sortNewest.classList.toggle('active', sortType === 'newest');
-        sortOldest.classList.toggle('active', sortType === 'oldest');
+    function setSort(sortType, messageType) {
+        if (messageType === 'private') {
+            currentSortPrivate = sortType;
+            // Update button states for private
+            sortNewestPrivate.classList.toggle('active', sortType === 'newest');
+            sortOldestPrivate.classList.toggle('active', sortType === 'oldest');
+        } else if (messageType === 'public') {
+            currentSortPublic = sortType;
+            // Update button states for public
+            sortNewestPublic.classList.toggle('active', sortType === 'newest');
+            sortOldestPublic.classList.toggle('active', sortType === 'oldest');
+        }
         
         displayMessages();
     }
     
     function displayMessages() {
-        if (filteredMessages.length === 0) {
-            messagesList.innerHTML = '';
-            noMessages.classList.remove('hidden');
+        displayPrivateMessages();
+        displayPublicMessages();
+    }
+    
+    function displayPrivateMessages() {
+        if (filteredPrivateMessages.length === 0) {
+            privateMessagesList.innerHTML = '';
+            noPrivateMessages.classList.remove('hidden');
             return;
         }
         
-        noMessages.classList.add('hidden');
+        noPrivateMessages.classList.add('hidden');
         
         // Sort messages - pinned first, then by timestamp
-        const sortedMessages = [...filteredMessages].sort((a, b) => {
+        const sortedMessages = [...filteredPrivateMessages].sort((a, b) => {
             // First sort by pin status
             const aPinned = isPinnedFlag(a) ? 1 : 0;
             const bPinned = isPinnedFlag(b) ? 1 : 0;
@@ -617,15 +665,44 @@ document.addEventListener('DOMContentLoaded', () => {
             // Then sort by timestamp
             const dateA = new Date(a.timestamp);
             const dateB = new Date(b.timestamp);
-            return currentSort === 'newest' ? dateB - dateA : dateA - dateB;
+            return currentSortPrivate === 'newest' ? dateB - dateA : dateA - dateB;
         });
         
         // Create message cards
-        const messagesHTML = sortedMessages.map(message => createMessageCard(message)).join('');
-        messagesList.innerHTML = messagesHTML;
+        const messagesHTML = sortedMessages.map(message => createMessageCard(message, 'private')).join('');
+        privateMessagesList.innerHTML = messagesHTML;
     }
     
-    function createMessageCard(message) {
+    function displayPublicMessages() {
+        if (filteredPublicMessages.length === 0) {
+            publicMessagesList.innerHTML = '';
+            noPublicMessages.classList.remove('hidden');
+            return;
+        }
+        
+        noPublicMessages.classList.add('hidden');
+        
+        // Sort messages - pinned first, then by timestamp
+        const sortedMessages = [...filteredPublicMessages].sort((a, b) => {
+            // First sort by pin status
+            const aPinned = isPinnedFlag(a) ? 1 : 0;
+            const bPinned = isPinnedFlag(b) ? 1 : 0;
+            if (aPinned !== bPinned) {
+                return bPinned - aPinned;
+            }
+            
+            // Then sort by timestamp
+            const dateA = new Date(a.timestamp);
+            const dateB = new Date(b.timestamp);
+            return currentSortPublic === 'newest' ? dateB - dateA : dateA - dateB;
+        });
+        
+        // Create message cards
+        const messagesHTML = sortedMessages.map(message => createMessageCard(message, 'public')).join('');
+        publicMessagesList.innerHTML = messagesHTML;
+    }
+    
+    function createMessageCard(message, messageType) {
         const timestamp = new Date(message.timestamp).toLocaleString();
         const moodEmoji = getMoodEmoji(message.mood);
         const isPinned = isPinnedFlag(message);
@@ -776,9 +853,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Loading spinner
     function showLoading(show) {
-        const spinner = document.getElementById('loadingSpinner');
-        if (spinner) {
-            spinner.classList.toggle('hidden', !show);
+        const privateSpinner = document.getElementById('loadingSpinnerPrivate');
+        const publicSpinner = document.getElementById('loadingSpinnerPublic');
+        if (privateSpinner) {
+            privateSpinner.classList.toggle('hidden', !show);
+        }
+        if (publicSpinner) {
+            publicSpinner.classList.toggle('hidden', !show);
         }
     }
 
