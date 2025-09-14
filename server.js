@@ -1,8 +1,3 @@
-// All top-level await code is now wrapped in an async IIFE for Node.js v24+ compatibility
-(async () => {
-    // Add columns if missing (for migration)
-    try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_username TEXT'); } catch (e) {}
-    try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_gmail TEXT'); } catch (e) {}
 // (delete-user route moved below after all middleware & helpers are defined)
 
 const express = require('express');
@@ -11,6 +6,7 @@ const session = require('express-session');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,16 +66,20 @@ const pool = new Pool(
         }
 );
 
-pool.connect()
-    .then((client) => {
+// All async initialization wrapped in IIFE for Node.js v24+ compatibility
+(async () => {
+    try {
+        const client = await pool.connect();
         client.release();
         console.log('Connected to PostgreSQL');
-        return createTables();
-    })
-    .catch((err) => {
+        await createTables();
+        // Add columns if missing (for migration)
+        try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_username TEXT'); } catch (e) {}
+        try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS real_gmail TEXT'); } catch (e) {}
+    } catch (err) {
         console.error('Error connecting to PostgreSQL:', err.message);
         process.exit(1);
-    });
+    }
 
 async function createTables() {
     await pool.query(`
@@ -1086,14 +1086,14 @@ async function migratePublicMessagesRealAccountInfo() {
     }
 }
 // Run migration on startup
-migratePublicMessagesRealAccountInfo();
+    await migratePublicMessagesRealAccountInfo();
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Admin panel available at: http://localhost:${PORT}/admin`);
-    console.log(`Default admin credentials: admin / admin123`);
-});
+    // Start server
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Admin panel available at: http://localhost:${PORT}/admin`);
+        console.log(`Default admin credentials: admin / admin123`);
+    });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
