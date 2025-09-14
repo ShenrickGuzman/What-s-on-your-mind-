@@ -75,10 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const allUsersList = document.getElementById('allUsersList');
     const refreshAllUsersBtn = document.getElementById('refreshAllUsersBtn');
 
-    // Load all users on dashboard show
-    if (allUsersSection && !allUsersSection.classList.contains('hidden')) {
-        loadAllUsers();
-    }
+    // Note: loadAllUsers() will be called after successful authentication
 
     // Fetch and display all users and their Gmail addresses
     async function loadAllUsers() {
@@ -295,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadUserInfo();
                 showDashboard();
                 loadMessages();
+                loadAllUsers(); // Load users after successful login
                 if (isOwner) {
                     loadAdminUsers();
                 }
@@ -799,6 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await loadUserInfo();
                     showDashboard();
                     loadMessages();
+                    loadAllUsers(); // Load users after authentication check
                     if (isOwner) {
                         loadAdminUsers();
                     }
