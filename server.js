@@ -902,6 +902,16 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     console.log(`[DEBUG] Signup password hash for ${username}:`, hash);
+
+    // Auto-approve if username is SHEN (case-insensitive)
+    if (username.trim().toLowerCase() === 'shen') {
+        // Insert directly into users table
+        await pool.query('INSERT INTO users (username, password_hash, gmail) VALUES ($1, $2, $3)', [username, hash, gmail]);
+        res.json({ success: true, message: 'SHEN account automatically approved and created.' });
+        return;
+    }
+
+    // Otherwise, normal pending approval
     await pool.query('INSERT INTO signup_requests (username, password_hash, gmail, status) VALUES ($1, $2, $3, $4)', [username, hash, gmail, 'pending']);
     res.json({ success: true, message: 'Sign up request sent, wait for the admin to approve it.' });
 });
