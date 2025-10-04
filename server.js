@@ -675,18 +675,9 @@ app.post('/api/admin/register', (req, res) => {
         return res.status(400).json({ error: 'Password must be at least 6 characters long' });
     }
     
-    // Check if current user is super admin
-    pool.query('SELECT is_owner FROM admin_users WHERE id = $1', [req.session.userId])
-        .then(({ rows }) => {
-            const user = rows[0];
-            if (!user || !user.is_owner) {
-                res.status(403).json({ error: 'Only owners can create new accounts' });
-                return null;
-            }
-            return pool.query('SELECT id FROM admin_users WHERE username = $1', [username]);
-        })
+    // Allow anyone to create an admin account
+    pool.query('SELECT id FROM admin_users WHERE username = $1', [username])
         .then((result) => {
-            if (!result) return; // response already sent
             if (result.rows.length > 0) {
                 res.status(409).json({ error: 'Username already exists' });
                 return null;
